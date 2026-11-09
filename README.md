@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. With no API keys the app runs in **mock mode**: lyrics are placeholder text and audio is a test tone, but every state transition, the database, ffmpeg processing, the quality gate, and the preview cut are real. Use this to develop the UI and the pipeline without spending credits.
+Open http://localhost:3100. With no API keys the app runs in **mock mode**: lyrics are placeholder text and audio is a test tone, but every state transition, the database, ffmpeg processing, the quality gate, and the preview cut are real. Use this to develop the UI and the pipeline without spending credits.
 
 To generate real songs, set two keys in `.env`:
 
