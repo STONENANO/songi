@@ -1,0 +1,12 @@
+# Production image with ffmpeg. Works on Railway, Fly, Render, or any Docker host.
+FROM node:22-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+RUN npm run build
+ENV NODE_ENV=production PORT=3000
+EXPOSE 3000
+# ./data (embedded DB) and ./storage (audio) should be mounted volumes unless DATABASE_URL and S3 are set.
+CMD ["npm", "start"]
