@@ -6,7 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
-ENV NODE_ENV=production PORT=3100
-EXPOSE 3100
+ENV NODE_ENV=production PORT=4747
+EXPOSE 4747
 # ./data (embedded DB) and ./storage (audio) should be mounted volumes unless DATABASE_URL and S3 are set.
 CMD ["npm", "start"]

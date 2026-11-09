@@ -8,7 +8,7 @@ function flag(v: string | undefined): boolean {
 }
 
 export const env = {
-  appUrl: (process.env.APP_URL ?? "http://localhost:3100").replace(/\/$/, ""),
+  appUrl: (process.env.APP_URL ?? "http://localhost:4747").replace(/\/$/, ""),
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   llmModel: process.env.LLM_MODEL ?? "claude-opus-5-5",
