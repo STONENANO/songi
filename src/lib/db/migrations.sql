@@ -87,3 +87,77 @@ CREATE TABLE IF NOT EXISTS cost_ledger (
   cost_usd numeric(10,4),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- ===================== Songcraft v2 (additive, backward compatible) =====================
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS access_token_hash text;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS quiz_snapshot jsonb;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS brief_version integer;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS experiment jsonb;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS active_draft_id uuid;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS selected_version_id uuid;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS candidates_finalized_at timestamptz;
+
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS status text;
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS validation jsonb;
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS creative jsonb;
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS arrangement_id text;
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS plan jsonb;
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS fact_placement jsonb;
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS prompt_version text;
+ALTER TABLE lyric_drafts ADD COLUMN IF NOT EXISTS parent_draft_id uuid;
+
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS idempotency_key text;
+CREATE UNIQUE INDEX IF NOT EXISTS generations_idem_idx ON generations(idempotency_key);
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS slot integer;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS trigger text;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS model text;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS variant_id text;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS prompt_version text;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS preset_version text;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS music_direction jsonb;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS est_cost_usd numeric(10,4);
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS credits_consumed real;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS track_count integer;
+ALTER TABLE generations ADD COLUMN IF NOT EXISTS submitted_at timestamptz;
+
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS variant_id text;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS variant_label text;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS style_summary text;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS requested_duration real;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS source_audio_url text;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS audio_qa jsonb;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS name_heard boolean;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS score real;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS offered boolean NOT NULL DEFAULT false;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS offer_rank integer;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS selected boolean NOT NULL DEFAULT false;
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS purchase_status text NOT NULL DEFAULT 'none';
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS availability text NOT NULL DEFAULT 'available';
+CREATE UNIQUE INDEX IF NOT EXISTS song_versions_req_audio_idx ON song_versions(request_id, provider_audio_id);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id uuid NOT NULL REFERENCES song_requests(id) ON DELETE CASCADE,
+  version_id uuid NOT NULL REFERENCES song_versions(id),
+  status text NOT NULL DEFAULT 'pending',
+  offer_id text,
+  cart_id text,
+  checkout_url text,
+  shopify_order_id text,
+  amount_cents integer,
+  currency text,
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  paid_at timestamptz,
+  fulfilled_at timestamptz,
+  refunded_at timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS orders_shopify_order_idx ON orders(shopify_order_id);
+CREATE INDEX IF NOT EXISTS orders_request_idx ON orders(request_id);
+
+CREATE TABLE IF NOT EXISTS webhook_receipts (
+  id text PRIMARY KEY,
+  source text NOT NULL,
+  topic text,
+  received_at timestamptz NOT NULL DEFAULT now()
+)

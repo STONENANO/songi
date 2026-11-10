@@ -9,7 +9,13 @@
     "start": "next start -p 4747",
     "typecheck": "tsc --noEmit",
     "golden": "tsx scripts/golden-run.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "test": "tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test:unit": "tsx --test tests/unit/*.test.ts",
+    "test:integration": "tsx --test tests/integration/*.test.ts",
+    "test:e2e": "node tests/e2e/flow.e2e.cjs",
+    "metrics": "tsx scripts/metrics.ts",
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",

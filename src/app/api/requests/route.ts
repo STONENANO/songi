@@ -1,8 +1,10 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod/v4";
 import { getDb, schema } from "@/lib/db";
+import { env } from "@/lib/env";
 import { GENRES } from "@/lib/songcraft";
 import { runBriefing } from "@/lib/pipeline/run";
+import { newProjectToken, projectCookie, rateLimit, clientIp } from "@/lib/session/project";
 
 export const runtime = "nodejs";
 
@@ -20,11 +22,14 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
-  const parsed = Body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues.map((i) => i.message).join(" ") }, { status: 400 });
+  // Abuse control: song projects trigger paid generation later, so cap creation per IP.
+  if (!rateLimit(`create:${clientIp(req)}`, env.isProd ? 8 : 200, 60 * 60_000)) {
+    return NextResponse.json({ error: "Too many songs started from this connection. Please try again later." }, { status: 429 });
   }
+  const parsed = Body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues.map((i) => i.message).join(" ") }, { status: 400 });
   const b = parsed.data;
+  const { token, hash } = newProjectToken();
   const db = await getDb();
   const [row] = await db
     .insert(schema.songRequests)
@@ -39,10 +44,15 @@ export async function POST(req: Request) {
       mood: b.mood || null,
       customStyle: b.customStyle || null,
       email: b.email || null,
+      accessTokenHash: hash,
+      quizSnapshot: { ...b, submittedAt: new Date().toISOString() },
+      // Experiment arm recorded with the project so results can be compared later.
+      experiment: { writer: env.writerVersion, directionMode: process.env.DIRECTION_MODE === "legacy" ? "legacy" : "director", vocalMode: process.env.VOCAL_MODE === "generic" ? "generic" : "specific", variantMode: env.variantMode, desired: env.desiredCandidates, collection: env.candidateCollection },
     })
     .returning({ id: schema.songRequests.id });
 
-  // Brief extraction + lyric writing take 10 to 40 seconds; run after responding.
   after(() => runBriefing(row.id));
-  return NextResponse.json({ id: row.id }, { status: 201 });
+  const res = NextResponse.json({ id: row.id }, { status: 201 });
+  res.headers.append("Set-Cookie", projectCookie(row.id, token));
+  return res;
 }

@@ -45,3 +45,6 @@ audio { width: 100%; margin-top: 10px; }
 .grid2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
 @media (min-width: 640px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 .banner { font-size: 13px; padding: 8px 12px; border-radius: 8px; background: #2a2416; color: var(--accent); margin-bottom: 16px; }
+.version.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.version audio { margin-top: 10px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

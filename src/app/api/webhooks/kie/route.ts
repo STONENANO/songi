@@ -1,30 +1,41 @@
 import { NextResponse, after } from "next/server";
 import { env } from "@/lib/env";
-import { handleTaskResult } from "@/lib/pipeline/run";
-import type { KieCallback } from "@/lib/kie/types";
+import { handleKieCallback } from "@/lib/pipeline/run";
+import { verifyCallbackParams, verifyKieSignature } from "@/lib/kie/client";
+import { KieCallbackSchema } from "@/lib/kie/types";
 
 export const runtime = "nodejs";
 
 /**
- * Kie.ai posts here when a music task finishes. It expects a 200 within 15
- * seconds, so the heavy work (download, ffmpeg, quality gate) runs after the
- * response. Only the "complete" stage carries final audio.
+ * Kie.ai posts here when a task changes state. We answer 200 fast (Kie allows
+ * 15s) and never trust audio URLs from the body: the handler re-fetches the
+ * authoritative result from Kie.ai's task API.
+ *
+ * Authentication, in order:
+ *  1. Our own signature on the callback URL (gid + sig), bound to one generation.
+ *     Legacy URLs used ?secret=; still accepted for tasks submitted before v2.
+ *  2. Kie.ai's X-Webhook-Signature (HMAC of taskId.timestamp), required when KIE_WEBHOOK_HMAC_KEY is set.
  */
 export async function POST(req: Request) {
   const url = new URL(req.url);
-  if (url.searchParams.get("secret") !== env.kieWebhookSecret) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-  const body = (await req.json().catch(() => null)) as KieCallback | null;
-  if (!body?.data?.task_id) return NextResponse.json({ error: "bad payload" }, { status: 400 });
+  const gid = url.searchParams.get("gid");
+  const ourSig = verifyCallbackParams(gid, url.searchParams.get("sig"));
+  const legacy = !gid && url.searchParams.get("secret") === env.kieWebhookSecret;
+  if (!ourSig && !legacy) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const taskId = body.data.task_id;
-  if (body.code !== 200) {
-    after(() => handleTaskResult(taskId, { ok: false, error: body.msg || `provider code ${body.code}` }));
-  } else if (body.data.callbackType === "complete" && body.data.data?.length) {
-    const tracks = body.data.data;
-    after(() => handleTaskResult(taskId, { ok: true, tracks }));
+  const parsed = KieCallbackSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "bad payload" }, { status: 400 });
+  const taskId = parsed.data.data.task_id ?? parsed.data.data.taskId ?? null;
+
+  if (env.kieWebhookHmacKey) {
+    if (!taskId || !verifyKieSignature(taskId, req.headers.get("x-webhook-timestamp"), req.headers.get("x-webhook-signature"), env.kieWebhookHmacKey)) {
+      return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+    }
+  } else if (env.isProd) {
+    console.warn("[kie] KIE_WEBHOOK_HMAC_KEY is not set; relying on the signed callback URL only.");
   }
-  // "text" and "first" stages: acknowledged, nothing to do yet.
+
+  // "text" and "first" stages are progress notices; the handler only acts once the task is final.
+  after(() => handleKieCallback({ generationId: gid, taskId, code: parsed.data.code, msg: parsed.data.msg }));
   return NextResponse.json({ status: "received" });
 }

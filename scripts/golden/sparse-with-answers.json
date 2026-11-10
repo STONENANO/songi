@@ -1,0 +1,15 @@
+{
+  "recipientName": "Ben",
+  "pronunciation": null,
+  "relationship": "sibling",
+  "occasion": "birthday",
+  "story": "My brother is awesome and always there for me.",
+  "genreKey": "country",
+  "vocalGender": "m",
+  "mood": "heartfelt",
+  "customStyle": null,
+  "followUpAnswers": {
+    "What is one specific memory with Ben that always makes you smile?": "He taught me to ride a bike in the church parking lot.",
+    "What is something Ben always says or does that is so him?": "He says \"easy peasy\" about everything, even taxes."
+  }
+}

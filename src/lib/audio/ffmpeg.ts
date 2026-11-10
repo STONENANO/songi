@@ -19,16 +19,35 @@ export function run(bin: string, args: string[]): Promise<{ stdout: string; stde
   });
 }
 
-/** Download http(s) or copy file:// into dest. */
-export async function downloadToFile(url: string, dest: string): Promise<void> {
+/**
+ * Download http(s) or copy file:// into dest, with a size cap and a content-type
+ * check. Callers must validate the URL first (kie/client.ts assertSafeAudioUrl).
+ */
+export async function downloadToFile(url: string, dest: string, opts: { maxBytes?: number; timeoutMs?: number } = {}): Promise<number> {
+  const maxBytes = opts.maxBytes ?? 60 * 1024 * 1024;
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   if (url.startsWith("file://")) {
-    fs.copyFileSync(url.slice("file://".length), dest);
-    return;
+    const src = url.slice("file://".length);
+    if (fs.statSync(src).size > maxBytes) throw new Error("Audio file exceeds the size limit.");
+    fs.copyFileSync(src, dest);
+    return fs.statSync(dest).size;
   }
-  const res = await fetch(url);
-  if (!res.ok || !res.body) throw new Error(`Download failed ${res.status} for ${url}`);
-  await pipeline(Readable.fromWeb(res.body as never), fs.createWriteStream(dest));
+  const res = await fetch(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000), redirect: "follow" });
+  if (!res.ok || !res.body) throw new Error(`Download failed with HTTP ${res.status}.`);
+  const type = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (type && !/^(audio\/|application\/octet-stream|binary\/octet-stream)/.test(type)) throw new Error(`Unexpected content type "${type}" for audio.`);
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > maxBytes) throw new Error("Audio file exceeds the size limit.");
+  let seen = 0;
+  const limiter = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, ctrl) {
+      seen += chunk.byteLength;
+      if (seen > maxBytes) ctrl.error(new Error("Audio file exceeds the size limit."));
+      else ctrl.enqueue(chunk);
+    },
+  });
+  await pipeline(Readable.fromWeb(res.body.pipeThrough(limiter) as never), fs.createWriteStream(dest));
+  return seen;
 }
 
 export async function probeDuration(file: string): Promise<number> {
