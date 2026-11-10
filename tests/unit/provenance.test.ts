@@ -101,3 +101,23 @@ test("v1 briefs stored before provenance still load", () => {
   assert.equal(b!.facts[0].provenance, "legacy");
   assert.equal(b!.emotionalThesis, "s");
 });
+
+test("more than three must-use facts: the extras become priority 2 and the change is recorded", () => {
+  const story4 = "Mom taught me to make pancakes every Sunday. She sings off-key in the car. Her happy place is the lake house in Michigan. She still beats everyone at cards.";
+  const s4 = [{ source: "story" as const, index: 0, text: story4 }];
+  const r = retainFacts(
+    [
+      f("Taught me pancakes every Sunday", "Mom taught me to make pancakes every Sunday", 1),
+      f("Sings off-key in the car", "She sings off-key in the car", 1),
+      f("Happy place is the lake house in Michigan", "Her happy place is the lake house in Michigan", 1),
+      f("Still beats everyone at cards", "She still beats everyone at cards", 1),
+    ],
+    s4,
+    12,
+    3,
+  );
+  assert.equal(r.facts.filter((x) => x.priority === 1).length, 3);
+  assert.equal(r.facts.length, 4, "the demoted fact is kept, not dropped");
+  assert.equal(r.facts[3].priority, 2);
+  assert.ok(r.notes.some((n) => n.includes("priority 2")));
+});

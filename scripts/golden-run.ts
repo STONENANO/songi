@@ -5,6 +5,7 @@
  *   npm run golden                                   # current settings, all fixtures
  *   npm run golden -- --only mom                     # fixtures whose name starts with "mom"
  *   npm run golden -- --a writer=v1 --b writer=v2    # A/B: one variable at a time
+ *   npm run golden -- --a writer=v2 --b writer=v3    # idea-first writer vs current
  *   npm run golden -- --a arrangement=legacy_blueprint --b arrangement=adaptive
  *   npm run golden -- --a direction=legacy --b direction=director   (style prompts only)
  *   npm run golden -- --json data/golden-out/run.json
@@ -21,7 +22,7 @@ import { extractBrief, writeLyrics, getGenre, buildKieInput, genreArchetypes, co
 import { withUsage } from "../src/lib/llm/client";
 import { env } from "../src/lib/env";
 
-type Arm = { writer?: "v1" | "v2"; arrangement?: string; direction?: "director" | "legacy"; vocal?: "specific" | "generic" };
+type Arm = { writer?: "v1" | "v2" | "v3"; arrangement?: string; direction?: "director" | "legacy"; vocal?: "specific" | "generic" };
 
 function parseArm(s: string | undefined): Arm {
   const arm: Arm = {};

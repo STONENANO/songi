@@ -130,3 +130,31 @@ test("a three-line bridge is flagged as unpaired; outros and even sections are n
   assert.deepEqual(warnings.map((w) => w.section), ["Bridge"]);
   assert.deepEqual(validateLyrics(goodLyrics(), ctx()).issues.filter((i) => i.code === "odd_line_count"), []);
 });
+
+test("melodic math: a verse 2 line far longer than its verse 1 twin is flagged", () => {
+  const l = goodLyrics();
+  l.sections = l.sections.map((s) =>
+    s.tag === "Verse 2" ? { ...s, lines: ["Up at the lake house in Michigan", "You'd sing off-key with the windows rolled all the way down and the radio blasting again", s.lines[2], s.lines[3]] } : s,
+  );
+  const w = validateLyrics(l, ctx(l)).issues.find((i) => i.code === "melodic_mismatch");
+  assert.ok(w);
+  assert.equal(w!.section, "Verse 2");
+  assert.equal(validateLyrics(goodLyrics(), ctx()).issues.filter((i) => i.code === "melodic_mismatch").length, 0);
+});
+
+test("the title must be sung in the chorus's first or last line", () => {
+  assert.equal(validateLyrics(goodLyrics(), ctx()).issues.filter((i) => i.code === "title_not_in_chorus").length, 0);
+  const l = goodLyrics({ title: "Every Tuesday, Linda" });
+  assert.ok(validateLyrics(l, ctx(l)).issues.some((i) => i.code === "title_not_in_chorus"));
+  const named = goodLyrics({ title: "A Song for Linda" });
+  assert.equal(validateLyrics(named, ctx(named)).issues.filter((i) => i.code === "title_not_in_chorus").length, 0, "a title that is only the name is not checked");
+});
+
+test("a chorus much wordier than the verses gets a suggestion", () => {
+  const l = goodLyrics();
+  const long = ["Linda, you're the one who sang the whole way down every highway we ever drove", "Off-key and loud and never caring who was listening from the other cars", "Every single Sunday morning you made the kitchen feel like home to all of us", "Linda, you were never, ever alone in any of it"];
+  l.sections = l.sections.map((s) => (s.tag === "Chorus" ? { ...s, lines: long } : s));
+  const i = validateLyrics(l, ctx(l)).issues.find((x) => x.code === "chorus_longer_than_verses");
+  assert.ok(i);
+  assert.equal(i!.severity, "suggestion");
+});

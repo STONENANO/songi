@@ -145,6 +145,7 @@ export function retainFacts(
   raw: BriefLLM["facts"],
   sources: SourceText[],
   cap: number,
+  maxPriority1 = Infinity,
 ): { facts: BriefFact[]; omitted: OmittedFact[]; notes: string[] } {
   const omitted: OmittedFact[] = [];
   const notes: string[] = [];
@@ -181,6 +182,17 @@ export function retainFacts(
     }
     kept.push(f);
   }
+
+  // A song has about three boxes (verse 1, verse 2, bridge): more must-use facts than that get crammed.
+  let p1 = 0;
+  for (const f of kept) {
+    if (f.priority !== 1) continue;
+    if (++p1 > maxPriority1) {
+      f.priority = 2;
+      notes.push(`"${f.text}" moved to priority 2: at most ${maxPriority1} must-use details fit a song.`);
+    }
+  }
+  kept.sort((a, b) => a.priority - b.priority);
 
   const final = kept.slice(0, cap);
   for (const f of kept.slice(cap)) omitted.push({ text: f.text, priority: f.priority, reason: "capacity" });
@@ -238,13 +250,13 @@ export function relationshipConflict(relationship: string, story: string): { iss
  * either traces to the customer's words or is removed, and each removal is
  * recorded in provenanceNotes.
  */
-export function buildSourceBackedBrief(llm: BriefLLM, opts: { story: string; followUpAnswers?: Record<string, string> | null; recipientName?: string | null; pronunciation?: string | null; relationship: string; factCap: number }): Brief {
+export function buildSourceBackedBrief(llm: BriefLLM, opts: { story: string; followUpAnswers?: Record<string, string> | null; recipientName?: string | null; pronunciation?: string | null; relationship: string; factCap: number; maxPriority1?: number }): Brief {
   const sources: SourceText[] = [{ source: "story", index: 0, text: opts.story }];
   Object.values(opts.followUpAnswers ?? {}).forEach((a, i) => {
     if (a && a !== "(skipped)") sources.push({ source: "followup", index: i, text: a });
   });
 
-  const { facts, omitted, notes } = retainFacts(llm.facts, sources, opts.factCap);
+  const { facts, omitted, notes } = retainFacts(llm.facts, sources, opts.factCap, opts.maxPriority1);
   const phrases = verifyPhrases(llm.signaturePhrases, sources);
   for (const d of phrases.dropped) notes.push(`Dropped signature phrase "${d}": not found verbatim in the customer's words.`);
 

@@ -107,3 +107,36 @@ test("craftRepairBelow 0 disables the singability polish too", async () => {
   const { result } = await withUsage(() => writeLyrics({ brief: brief(), genre: country, mood: null, maxRepairs: 1, craftRepairBelow: 0, polishSingabilityBelow: 7 }));
   assert.equal(result.attempts.length, 1);
 });
+
+test("writer v3 drafts map onto the shared contract and keep their plan", async () => {
+  const { fromV3Lyrics } = await import("../../src/lib/songcraft/types");
+  const base = goodLyrics();
+  const v3 = {
+    ...base,
+    plan: {
+      thesis: "Her joy taught me mine.",
+      shape: "joke_to_truth" as const,
+      hookOptions: [
+        { kind: "their_words" as const, line: "You never cared who heard", verdict: "Hers, but flat." },
+        { kind: "parallel_phrase" as const, line: "From the stove to the open road", verdict: "Compresses it." },
+        { kind: "image" as const, line: "The song in the car", verdict: "Sings well." },
+      ],
+      hookConcept: "Linda, you're the song in the car",
+      centralDetail: "fact_02",
+      boxes: [
+        { section: "Verse 1", idea: "Sunday pancakes", factIds: ["fact_01"] },
+        { section: "Verse 2", idea: "Off-key at the lake", factIds: ["fact_02"] },
+      ],
+      reframe: "The last chorus becomes a thank-you.",
+      payoff: "Seen.",
+      ending: "Echo the hook.",
+    },
+  };
+  const l = fromV3Lyrics(v3);
+  assert.deepEqual(l.plan.verseRoles, ["Verse 1: Sunday pancakes [fact_01]", "Verse 2: Off-key at the lake [fact_02]"]);
+  assert.equal((l.plan as Record<string, unknown>).shape, "joke_to_truth");
+  songcraftHooks.writer = () => goodLyrics();
+  songcraftHooks.verifier = () => report();
+  const { result } = await withUsage(() => writeLyrics({ brief: brief(), genre: country, mood: null, writerVersion: "v3", maxRepairs: 1, craftRepairBelow: 0 }));
+  assert.match(result.chosen.promptVersion, /\/v3$/);
+});

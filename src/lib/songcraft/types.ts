@@ -13,7 +13,7 @@ import { z } from "zod/v4";
  */
 
 export const BRIEF_VERSION = 2;
-export const PROMPT_VERSION = "songcraft-v2.4";
+export const PROMPT_VERSION = "songcraft-v2.5";
 
 /* -------------------------------------------------------------------------- */
 /* Brief                                                                       */
@@ -241,6 +241,57 @@ export const LyricsSchema = z.object({
     .describe("Empty string, unless the name is deliberately NOT in the first two chorus lines; then one sentence explaining why it reads better elsewhere in the chorus."),
 });
 export type Lyrics = z.infer<typeof LyricsSchema>;
+
+/**
+ * Writer v3 plans the idea before writing: the song's shape, three competing
+ * hooks, one box per section, and how the bridge reframes the last chorus.
+ * Converted to the shared Lyrics contract by fromV3Lyrics, so every check and
+ * the verifier judge v2 and v3 the same way. The extra plan fields are kept
+ * on the stored plan for review.
+ */
+export const SONG_SHAPES = ["blessing", "then_and_now", "never_said", "joke_to_truth", "portrait", "other"] as const;
+export const HOOK_KINDS = ["their_words", "parallel_phrase", "twist", "wish", "image"] as const;
+
+export const SongPlanV3Schema = z.object({
+  thesis: z.string().describe("The one feeling this song exists to say, in one sentence. Not a list of facts."),
+  shape: z.enum(SONG_SHAPES).describe("blessing = 'I hope / may you'; then_and_now = you were this and still are; never_said = the thank-you I owe you; joke_to_truth = the funny detail turns out to be the point; portrait = who you are, shown through scenes; other."),
+  hookOptions: z
+    .array(
+      z.object({
+        kind: z.enum(HOOK_KINDS),
+        line: z.string().describe("The hook line as it would be sung."),
+        verdict: z.string().describe("One sentence: does only this story own it, does it compress the relationship, would a person actually say it, does it sing?"),
+      }),
+    )
+    .describe("Exactly three hook ideas of different kinds, judged honestly."),
+  hookConcept: z.string().describe("The winning hook line, exactly as the chorus will sing it. The title comes from it."),
+  centralDetail: z.string().describe("The single most compelling personal detail (fact id and a few words)."),
+  boxes: z
+    .array(
+      z.object({
+        section: z.string().describe("Section tag, e.g. 'Verse 1', 'Verse 2', 'Bridge'."),
+        idea: z.string().describe("The one idea this section carries and how it sets up the chorus."),
+        factIds: z.array(z.string()).describe("Brief fact ids that live here. Each fact has one home."),
+      }),
+    )
+    .describe("One box per verse and bridge. Every priority-1 fact appears in exactly one box."),
+  reframe: z.string().describe("What the final chorus means that the first chorus did not, because of the bridge or last verse."),
+  payoff: z.string().describe("What the listener should feel at the end."),
+  ending: z.string().describe("How the outro resolves: a callback to something already sung, never a new fact."),
+});
+
+export const LyricsV3Schema = LyricsSchema.extend({ plan: SongPlanV3Schema });
+export type LyricsV3 = z.infer<typeof LyricsV3Schema>;
+
+/** Map a v3 draft onto the shared contract; the v3 plan fields ride along on plan. */
+export function fromV3Lyrics(v3: LyricsV3): Lyrics {
+  const p = v3.plan;
+  const plan = {
+    ...p,
+    verseRoles: p.boxes.map((b) => `${b.section}: ${b.idea}${b.factIds.length ? ` [${b.factIds.join(", ")}]` : ""}`),
+  };
+  return { ...v3, plan } as Lyrics;
+}
 export type SongPlan = z.infer<typeof SongPlanSchema>;
 
 /** The original (v1) writer contract, kept so the old writer can be A/B tested. */

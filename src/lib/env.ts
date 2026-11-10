@@ -3,6 +3,7 @@
  * Mock modes switch on automatically when the matching credentials are missing,
  * so a fresh clone runs end-to-end with zero credentials and zero spend.
  */
+export type WriterVersion = "v1" | "v2" | "v3";
 function flag(v: string | undefined, dflt = false): boolean {
   if (v === undefined || v === "") return dflt;
   return v === "1" || v === "true" || v === "yes";
@@ -46,9 +47,10 @@ export const env = {
   },
 
   /* ---------------- Songcraft ---------------- */
-  /** "v2" (default) or "v1" (the original writer, kept for A/B comparison). */
-  get writerVersion(): "v1" | "v2" {
-    return process.env.SONGCRAFT_WRITER === "v1" ? "v1" : "v2";
+  /** "v2" (default), "v3" (idea-first writer, under evaluation) or "v1" (the original writer). */
+  get writerVersion(): WriterVersion {
+    const v = process.env.SONGCRAFT_WRITER;
+    return v === "v1" || v === "v3" ? v : "v2";
   },
   /** Automatic lyric repair passes after the first draft. */
   get lyricMaxRepairs(): number {
@@ -61,6 +63,10 @@ export const env = {
   /** Also polish when the verifier's singability score (1-10) is below this, whatever the overall score. 0 disables. */
   get lyricPolishSingabilityBelow(): number {
     return num(process.env.LYRIC_POLISH_SINGABILITY_BELOW, 7);
+  },
+  /** At most this many must-use (priority-1) facts; the rest become priority 2. */
+  get briefMaxPriority1(): number {
+    return num(process.env.BRIEF_MAX_PRIORITY1, 3);
   },
   get briefFactCap(): number {
     return num(process.env.BRIEF_FACT_CAP, 12);

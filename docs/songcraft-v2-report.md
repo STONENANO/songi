@@ -187,6 +187,34 @@ With `DESIRED_CANDIDATES=2`, generation cost matches the old system (one task), 
 
 Change one variable per experiment, keep model versions and fixtures fixed, and collect several samples per arm because generation is stochastic.
 
+## 12. Writer v3 (idea-first), under evaluation
+
+Built after the first real golden runs (mom-60, wedding, two friend fixtures)
+showed the same failures every time: singability was the lowest score, choruses
+rhymed weakly, leftover facts were tacked on as extra lines, and songs walked
+through every fact in order.
+
+- `SONGCRAFT_WRITER=v3` uses `LYRICIST_SYSTEM_V3`: a sequence (idea, boxes,
+  chorus first, verses as setups, bridge as reframe, outro, singability pass)
+  instead of a growing rule list. The truth rules are unchanged from v2.
+- The v3 plan records the shape (blessing, then_and_now, never_said,
+  joke_to_truth, portrait), three competing hook options with verdicts, one
+  box per section with its fact ids, and the reframe. `fromV3Lyrics` maps it to
+  the shared contract, so v2 and v3 face identical checks and the same verifier.
+- New code checks (all writers): `melodic_mismatch` (line n of a later verse vs
+  verse 1, syllables), `title_not_in_chorus`, `chorus_longer_than_verses`
+  (suggestion), plus the earlier `odd_line_count`.
+- Verifier: explicit rubric per score. Singability starts at 10 and loses points
+  for melodic mismatches, prosody errors, breath-length lines, unpaired lines and
+  closed held vowels. A fact-list song is capped at 6 for emotional impact.
+  Scores from before this change are not directly comparable.
+- Brief: at most `BRIEF_MAX_PRIORITY1` (default 3) must-use facts; extras are
+  demoted to priority 2 and recorded in provenanceNotes.
+
+Not yet evaluated with the real model. Compare with
+`npm run golden -- --a writer=v2 --b writer=v3`, then generate audio for a few
+songs from each arm; scores alone do not decide it.
+
 ## Before and after: `mom-60-country` fixture
 
 The story: "Mom taught me to make pancakes every Sunday. She sings off-key in the car on every road trip and does not care. Her happy place is the lake house in Michigan. She is turning 60 and still beats everyone at cards."

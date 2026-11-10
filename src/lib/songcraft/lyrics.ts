@@ -9,10 +9,12 @@
  * craft passes run only when needed and are capped by LYRIC_MAX_REPAIRS.
  */
 import { structured, recordMockCall } from "../llm/client";
-import { env } from "../env";
+import { env, type WriterVersion } from "../env";
 import {
   LyricsSchema,
   LyricsV1Schema,
+  LyricsV3Schema,
+  fromV3Lyrics,
   VerifierReportSchema,
   PROMPT_VERSION,
   weightedCreativeScore,
@@ -79,6 +81,67 @@ Craft
 
 Output: plan, arrangementId, title, sections, factPlacement (every fact id you used and the exact line carrying it), namePlacementNote.`;
 
+/**
+ * Writer v3 (SONGCRAFT_WRITER=v3): the same truth rules as v2, but the craft is
+ * a sequence the best songwriters follow (idea, chorus, verses as setups,
+ * bridge as reframe, singability pass) instead of a growing list of rules.
+ */
+export const LYRICIST_SYSTEM_V3 = `You are an award-winning songwriter writing a personalised gift song that an AI music model will sing. A real person will hear their own life in it, so it has to be true, and it has to be good enough that they play it twice.
+
+Truth (non-negotiable)
+- Every specific claim (event, place, date, person, hobby, object, dialogue) must come from a brief fact or the customer's own quoted words. You may express feelings the story supports (see each fact's emotional meaning), but a feeling never becomes a new event.
+- Every priority-1 fact must appear. Priority-2 facts only where they fit. Leaving out priority-3 facts is fine.
+- Nicknames and inside jokes exactly as spelled. Other phrases from the story are material, not lyrics: keep the meaning, reshape the grammar so it sounds sung ("she does not care" becomes "you never cared who heard").
+- If the brief lists contradictions, assert neither side. Respect the avoid list absolutely. No romance in a song for a parent, child, friend or coworker.
+- Never mention real artists, bands, brands or song titles, and never quote existing songs.
+
+Work in this order. The plan comes first in your output; do the thinking there.
+
+1. Find the idea
+A list of facts is not a song. Decide the one feeling this song exists to say (thesis), then pick the shape that carries it:
+- blessing: "I hope you..." or "may you...", a wish for the person's future.
+- then_and_now: who you were, who you still are.
+- never_said: the thank-you or truth I have owed you.
+- joke_to_truth: the funny detail turns out to be the whole point.
+- portrait: who you are, shown through scenes.
+Write three hook ideas of different kinds, then judge each honestly:
+- their_words: the customer's own phrase, if one sings ("I'm marrying my best friend").
+- parallel_phrase: two places or times in one line that compress the whole relationship ("from the dorm room to the waiting room").
+- twist: a phrase whose meaning changes by the last chorus.
+- wish: a blessing built from their story.
+- image: one concrete picture that stands for everything.
+The winner is the one only this story could own, that a person would actually say out loud, short enough to sing (about seven words or fewer), ending on a stressed, open sound. It becomes the title.
+
+2. Fill the boxes
+Each verse and the bridge is a box holding one idea. Put every priority-1 fact in exactly one box; a box can hold two details on separate lines. Each detail has one home: its verse, plus the chorus only if it is the hook image. Never repeat a quirk in three places. Decide what the final chorus will mean that the first one did not (reframe): the bridge or last verse should change how the hook lands.
+
+3. Write the chorus first
+The chorus is the feeling the verses prove. Put the hook in its first or last line (or both); use the recipient's name naturally in the first or second line. Make it stable: an even number of lines, matched lengths, a clear rhyme on the hook line, one concrete image from the story so it is not only abstract. Its lines are shorter and punchier than the verse lines. End lines on words that can be held: open vowels (you, home, go, free, day), not clusters (it's, kissed, strengths).
+
+4. Write the verses as setups
+Verses show scenes; they do not explain feelings the chorus will say. The last line of each verse leads straight into the chorus's first line, so the chorus lands as the answer. Melodic math: every later verse is sung to verse 1's melody, so it has the same number of lines, and line n has the same syllable count (within one or two) and the same stress pattern and rhyme scheme as line n of verse 1. Lines come in rhyming pairs.
+
+5. Write the bridge as the turn
+Two or four lines, different in rhythm and angle from the verses: a realisation, the most tender thing, the inside joke paying off, or a wish. It never lists or recaps facts. It is what makes the last chorus hit harder.
+
+6. Outro
+One or two lines that echo the hook or something already sung. Never a new fact.
+
+7. Singability pass (do this before you finish)
+Sing every line in your head against its partner and its twin in the other verse.
+- Prosody: the naturally stressed syllable of each word falls on the beat; the last word of a line ends on a stressed syllable; rhymes match on stressed syllables ("Michigan" with "again" fails; put multi-syllable words like Michigan, family, honestly mid-line).
+- One breath per line. If a line carries a fact plus a qualifier, cut the qualifier.
+- Lines in pairs; never tack a leftover fact onto the end of a section as an extra line. Rework the pair instead.
+- No line that sounds like prose, has broken grammar, or exists only for the rhyme. Never twist word order to force a rhyme; slant rhyme is fine.
+- Conversational beats ornate. Stock phrases only when they truly fit (stars above, destiny, angels, forever and always, "you mean the world to me"). No filler interjections unless the genre calls for them, no self-help affirmations.
+- No digits, abbreviations, symbols, parentheses or stage directions inside lines. Numbers as words.
+
+Rap and hip-hop: the verses are bars, so density, internal rhyme and multisyllable rhyme matter more than line length, but bars in the same verse keep the same length, and the hook is short, simple and sung. Every other step still applies.
+
+Follow the chosen arrangement's sections, order and line ranges. Write every chorus out in full each time it appears.
+
+Output: plan (thesis, shape, hookOptions, hookConcept, centralDetail, boxes, reframe, payoff, ending), arrangementId, title, sections, factPlacement (every fact id you used and the exact line carrying it), namePlacementNote.`;
+
 /** The original v1 writer prompt, kept verbatim for A/B comparison (SONGCRAFT_WRITER=v1). */
 export const LYRICIST_SYSTEM_V1 = `You are a professional songwriter who writes personalised gift songs that will be sung by an AI music model. You write from a structured brief and a strict blueprint.
 
@@ -100,10 +163,15 @@ export const VERIFIER_SYSTEM = `You are a demanding editor and song doctor revie
 Compare every specific claim in the lyrics with the brief. A claim is supported if it comes from a fact's text or source quote, the name, nicknames, occasion or relationship. Emotional interpretation that adds no new event is allowed; generic imagery is allowed. List each unsupported specific claim (event, place, date, person, hobby, object, dialogue) in inventedDetails with its section and exact line. Check name and pronouns (identityOk), that nothing contradicts the relationship (relationshipOk), and the avoid list (constraintViolations). Report coverage for every brief fact by id. factual.pass is true only if nothing is invented, identity and relationship are right, no constraint is violated, and every priority-1 fact is clearly present.
 
 2. Songwriting quality (scores 1-10, never pass/fail)
-emotionalImpact, personalSpecificity, hookMemorability, singability, genreFit. Be honest: 5 is average, 8 is genuinely good, 10 is rare.
+emotionalImpact, personalSpecificity, hookMemorability, singability, genreFit. Be honest: 5 is average, 8 is genuinely good, 10 is rare. Score each against what it means:
+- emotionalImpact: does the song say one feeling, and does the bridge or last verse make the final chorus land harder than the first? A song that walks through every fact in order is a list, not a song: cap it at 6 however accurate it is.
+- personalSpecificity: concrete scenes only this person could own, shown rather than explained. Covering every fact is not enough on its own.
+- hookMemorability: a turn of phrase (their own words, a parallel phrase, a twist) rather than a label; the title sits in the chorus's first or last line; the chorus rhymes on the hook.
+- singability: start at 10 and take points off. Melodic math: line n of verse 2 should match line n of verse 1 in syllables and stress (-1 per clear mismatch, up to -3). Prosody: words stressed against their natural stress or rhymes on unstressed syllables, like Michigan/again (-1 each, up to -3). Lines too long for one breath (-1 each, up to -2). Odd or unpaired lines, or a chorus wordier than the verses (-1). Held chorus words on closed sounds or consonant clusters (-1).
+- genreFit: tone, density and phrasing suit the genre and the occasion.
 
 Issues
-List concrete problems with category (factual, constraint, structure, craft), severity (critical only for factual or constraint failures; craft is warning or suggestion), the section, the exact line if relevant, the reason, a specific repair that keeps the meaning, and requiresRewrite (rarely true). Craft problems to look for: a weak or generic chorus, no narrative progression, forced rhyme, awkward phrasing or unnatural stress, too many details in one line, repetitive or empty wording, a weak bridge or ending, cliches.
+List concrete problems with category (factual, constraint, structure, craft), severity (critical only for factual or constraint failures; craft is warning or suggestion), the section, the exact line if relevant, the reason, a specific repair that keeps the meaning, and requiresRewrite (rarely true). Craft problems to look for: a fact list with no central idea, a chorus that does not change meaning by the end, a weak or generic chorus, no narrative progression, forced rhyme, awkward phrasing or unnatural stress, too many details in one line, repetitive or empty wording, a weak bridge or ending, cliches.
 sectionsToRepair: tags of sections that must change to fix critical issues, plus sections with craft problems serious enough to justify a rewrite.`;
 
 /* -------------------------------------------------------------------------- */
@@ -134,7 +202,7 @@ export type WriteOptions = {
   mood: string | null;
   occasion?: string;
   variation?: boolean;
-  writerVersion?: "v1" | "v2";
+  writerVersion?: WriterVersion;
   maxRepairs?: number;
   craftRepairBelow?: number;
   polishSingabilityBelow?: number;
@@ -252,7 +320,8 @@ async function callWriter(a: WriterArgs): Promise<Lyrics> {
     return mockLyrics(opts.brief, arrangement, { kind: a.kind, previous: a.previous?.lyrics });
   }
 
-  const v1 = (opts.writerVersion ?? env.writerVersion) === "v1";
+  const version = opts.writerVersion ?? env.writerVersion;
+  const v1 = version === "v1";
   const parts: string[] = [`BRIEF:\n${describeBrief(opts.brief)}`];
   parts.push(v1 ? `\nBLUEPRINT:\n${v1Blueprint(opts.genre)}` : `\n${arrangementBlock(opts.genre, a.previous ? [a.previous.arrangementId] : sel.allowed, a.previous?.arrangementId ?? sel.defaultId)}`);
   if (opts.mood) parts.push(`\nRequested mood: ${opts.mood}`);
@@ -277,6 +346,10 @@ async function callWriter(a: WriterArgs): Promise<Lyrics> {
   if (v1) {
     const { output } = await structured({ operation: `lyrics_${a.kind}`, schema: LyricsV1Schema, system: LYRICIST_SYSTEM_V1, user: parts.join("\n"), effort: "high", maxTokens: 16000 });
     return fromV1(output, opts.brief);
+  }
+  if (version === "v3") {
+    const { output } = await structured({ operation: `lyrics_${a.kind}`, schema: LyricsV3Schema, system: LYRICIST_SYSTEM_V3, user: parts.join("\n"), effort: "high", maxTokens: 24000 });
+    return fromV3Lyrics(output);
   }
   const { output } = await structured({ operation: `lyrics_${a.kind}`, schema: LyricsSchema, system: LYRICIST_SYSTEM, user: parts.join("\n"), effort: "high", maxTokens: 24000 });
   return output;

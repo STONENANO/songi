@@ -19,7 +19,7 @@ Facts
 - sourceQuote: copy the customer's exact words that support the fact, character for character, from the story or a follow-up answer. Never paraphrase or tidy it. The pipeline checks every quote against the original text and drops facts it cannot trace.
 - emotionalMeaning: what the detail says about the relationship, in a few words. This is interpretation for the songwriter, never a new event.
 - narrativeRole: where the detail would serve the song best. closing_callback means a detail worth planting early and echoing at the end, not a detail saved for the last line.
-- Priority 1 for the 2 to 4 most personal, specific details (memories, inside jokes, named places, things only these two people share). Generic traits ("kind", "always there") are priority 2 or 3.
+- Priority 1 for the 2 or 3 most personal, specific details: memories, inside jokes, named places, things only these two people share. A song has room for about three (verse 1, verse 2, the bridge); everything else is priority 2 or 3. Generic traits ("kind", "always there") are priority 2 or 3.
 
 Voice
 - signaturePhrases: the customer's memorable wording: sayings, inside jokes, nicknames, quotes, unusual expressions. Exact spelling. Only phrases that appear in what they wrote.
@@ -75,6 +75,7 @@ export async function extractBrief(input: QuizInput): Promise<Brief> {
     pronunciation: input.pronunciation,
     relationship: input.relationship,
     factCap: env.briefFactCap,
+    maxPriority1: env.briefMaxPriority1,
   });
   // Hard guarantees regardless of what the model did: never ask twice, never more than two.
   if (input.followUpAnswers) brief.followUpQuestions = [];

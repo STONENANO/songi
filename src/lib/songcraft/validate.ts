@@ -39,6 +39,21 @@ export function renderLyrics(lyrics: Pick<Lyrics, "sections">): string {
   return lyrics.sections.map((s) => `[${s.tag}]\n${s.lines.join("\n")}`).join("\n\n");
 }
 
+const words = (t: string) => t.toLowerCase().match(/[a-z']+/g) ?? [];
+const TITLE_FILLER = new Set(["a", "an", "the", "song", "for", "to", "of", "and", "my", "your"]);
+
+/** The title's meaningful words: no parenthetical, no recipient name, no "A Song for". */
+export function titleWords(title: string, brief: Brief): string[] {
+  const names = [brief.recipient.name, brief.recipient.sungAs, ...brief.recipient.nicknames].filter(Boolean).flatMap((n) => words(n));
+  return words(title.replace(/\([^)]*\)/g, " ")).filter((w) => !names.includes(w) && !TITLE_FILLER.has(w));
+}
+
+/** True when the line contains at least 70% of the given words. */
+function containsMost(line: string, wanted: string[]): boolean {
+  const have = new Set(words(line));
+  return wanted.filter((w) => have.has(w)).length >= Math.ceil(wanted.length * 0.7);
+}
+
 /** Rough English syllable estimate, good enough to flag lines far outside a target range. */
 export function syllables(line: string): number {
   return (line.toLowerCase().match(/[a-z']+/g) ?? []).reduce((n, w) => {
@@ -147,6 +162,48 @@ export function validateLyrics(input: Lyrics, ctx: ValidateContext): ValidationR
   const verseLens = sections.filter((s) => /^verse/i.test(s.tag)).map((s) => s.lines.length);
   if (verseLens.length > 1 && new Set(verseLens).size > 1) {
     add({ code: "verse_length_mismatch", category: "craft", severity: "warning", reason: `Verses have different lengths (${verseLens.join(", ")} lines), which makes the melody hard to repeat.`, repair: "Give every verse the same number of lines." });
+  }
+
+  // --- Melodic math: later verses are sung to verse 1's melody, so line n of each verse needs about
+  //     the same number of syllables as line n of verse 1.
+  const verses = sections.filter((s) => /^verse/i.test(s.tag));
+  if (verses.length > 1) {
+    const ref = verses[0].lines.map(syllables);
+    for (const v of verses.slice(1)) {
+      if (v.lines.length !== ref.length) continue; // verse_length_mismatch already covers this
+      const off = v.lines
+        .map((l, j) => ({ j, a: ref[j], b: syllables(l), line: l }))
+        .filter(({ a, b }) => Math.abs(a - b) > Math.max(2, Math.round(Math.max(a, b) * 0.2)));
+      if (off.length) {
+        const worst = off.reduce((x, y) => (Math.abs(y.a - y.b) > Math.abs(x.a - x.b) ? y : x));
+        add({
+          code: "melodic_mismatch",
+          category: "craft",
+          severity: "warning",
+          section: v.tag,
+          line: worst.line,
+          reason: `${off.length} line(s) don't fit ${verses[0].tag}'s melody (${off.map((o) => `line ${o.j + 1}: ${o.b} vs ${o.a} syllables`).join("; ")}). The singer will cram or stretch them.`,
+          repair: `Match each line's syllable count and stress to the same line in ${verses[0].tag}, within one or two syllables.`,
+        });
+      }
+    }
+  }
+
+  // --- The chorus should be the punchy part: lines no longer than the verses'.
+  const firstChorus = sections.find((s) => isChorusTag(s.tag));
+  const avg = (ls: string[]) => (ls.length ? ls.reduce((n, l) => n + syllables(l), 0) / ls.length : 0);
+  const verseAvg = avg(verses.flatMap((v) => v.lines));
+  if (firstChorus && verseAvg > 0 && avg(firstChorus.lines) > verseAvg * 1.15 + 1) {
+    add({ code: "chorus_longer_than_verses", category: "craft", severity: "suggestion", section: firstChorus.tag, reason: `Chorus lines average ${avg(firstChorus.lines).toFixed(1)} syllables against ${verseAvg.toFixed(1)} in the verses; the chorus should be the punchy part.`, repair: "Tighten the chorus lines." });
+  }
+
+  // --- The title is the line people remember: it belongs in the chorus's first or last line.
+  if (firstChorus?.lines.length) {
+    const core = titleWords(input.title, ctx.brief);
+    const ends = [firstChorus.lines[0], firstChorus.lines[firstChorus.lines.length - 1]];
+    if (core.length && !ends.some((l) => containsMost(l, core))) {
+      add({ code: "title_not_in_chorus", category: "craft", severity: "warning", reason: `The title "${input.title}" isn't sung in the first or last line of the chorus, so the hook and the title don't match.`, repair: "Retitle the song with its hook line, or put the title in the chorus's first or last line." });
+    }
   }
 
   // --- Duplicated non-chorus sections (a common generation glitch).
