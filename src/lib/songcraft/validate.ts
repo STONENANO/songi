@@ -135,6 +135,14 @@ export function validateLyrics(input: Lyrics, ctx: ValidateContext): ValidationR
   for (const s of sections.slice(i)) unexpected.push(s.tag);
   for (const t of unexpected) add({ code: "unexpected_section", category: "structure", severity: "warning", section: t, reason: `[${t}] is not part of the ${ctx.arrangement.id} arrangement.` });
 
+  // --- Sections sing in pairs of lines; an odd count (other than a one-line tag) leaves a line with no partner.
+  for (const s of sections) {
+    const n = s.lines.length;
+    if (n > 1 && n % 2 === 1 && /^(verse|chorus|bridge|pre-chorus)/i.test(s.tag)) {
+      add({ code: "odd_line_count", category: "craft", severity: "warning", section: s.tag, reason: `${n} lines: the last line has no rhyme partner and the melody phrase comes out lopsided.`, repair: `Write ${n - 1} or ${n + 1} lines that pair up.` });
+    }
+  }
+
   // --- Verses should match each other in length so the melody can repeat.
   const verseLens = sections.filter((s) => /^verse/i.test(s.tag)).map((s) => s.lines.length);
   if (verseLens.length > 1 && new Set(verseLens).size > 1) {

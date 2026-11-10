@@ -122,3 +122,11 @@ test("draft comparison follows the hierarchy and never prefers an invalid draft"
   assert.ok(compareDrafts({ issues: [warn], creativeScore: 5 }, { issues: [warn, warn], creativeScore: 9 }) < 0, "fewer warnings first");
   assert.ok(compareDrafts({ issues: [], creativeScore: 8 }, { issues: [], creativeScore: 6 }) < 0, "then creative score");
 });
+
+test("a three-line bridge is flagged as unpaired; outros and even sections are not", () => {
+  const l = goodLyrics();
+  l.sections = l.sections.map((s) => (s.tag === "Bridge" ? { ...s, lines: [...s.lines, "One line too many at cards"] } : s));
+  const warnings = validateLyrics(l, ctx(l)).issues.filter((i) => i.code === "odd_line_count");
+  assert.deepEqual(warnings.map((w) => w.section), ["Bridge"]);
+  assert.deepEqual(validateLyrics(goodLyrics(), ctx()).issues.filter((i) => i.code === "odd_line_count"), []);
+});

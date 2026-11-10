@@ -84,3 +84,26 @@ test("legacy drafts are gated by their stored v1 verdict", () => {
   assert.equal(draftIsSingable({ status: "failed", verifierReport: { pass: true } }), false);
   assert.equal(draftIsSingable({ status: "verified", verifierReport: null }), true);
 });
+
+test("a good overall score with poor singability still gets one polish pass", async () => {
+  songcraftHooks.writer = () => goodLyrics();
+  let call = 0;
+  songcraftHooks.verifier = () => {
+    call++;
+    const s = (n: number) => ({ score: n, why: "" });
+    return call === 1
+      ? report({}, { scores: { emotionalImpact: s(8), personalSpecificity: s(8), hookMemorability: s(8), singability: s(5), genreFit: s(8) } })
+      : report();
+  };
+  const { result } = await withUsage(() => writeLyrics({ brief: brief(), genre: country, mood: null, maxRepairs: 1, craftRepairBelow: 5, polishSingabilityBelow: 7 }));
+  assert.equal(result.attempts.length, 2);
+  assert.equal(result.chosen.status, "verified");
+});
+
+test("craftRepairBelow 0 disables the singability polish too", async () => {
+  songcraftHooks.writer = () => goodLyrics();
+  const s = (n: number) => ({ score: n, why: "" });
+  songcraftHooks.verifier = () => report({}, { scores: { emotionalImpact: s(8), personalSpecificity: s(8), hookMemorability: s(8), singability: s(4), genreFit: s(8) } });
+  const { result } = await withUsage(() => writeLyrics({ brief: brief(), genre: country, mood: null, maxRepairs: 1, craftRepairBelow: 0, polishSingabilityBelow: 7 }));
+  assert.equal(result.attempts.length, 1);
+});

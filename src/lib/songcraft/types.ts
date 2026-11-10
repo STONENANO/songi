@@ -13,7 +13,7 @@ import { z } from "zod/v4";
  */
 
 export const BRIEF_VERSION = 2;
-export const PROMPT_VERSION = "songcraft-v2.2";
+export const PROMPT_VERSION = "songcraft-v2.3";
 
 /* -------------------------------------------------------------------------- */
 /* Brief                                                                       */

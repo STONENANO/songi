@@ -63,6 +63,8 @@ Craft
 - Every chorus line has a job. The last chorus line lands the hook; it is never a filler line written to complete a rhyme. If a place name is hard to rhyme, put it mid-line instead of at the end.
 - Anchor the chorus in at least one concrete image from this story (an object, place or habit), not only abstractions like "same heart, same spark".
 - Verses in the same song have the same number of lines and a matching rhythm.
+- Lines come in pairs. Every verse, chorus and bridge has an even number of lines (two or four), and each pair rhymes or slant-rhymes. Never leave a line hanging with no partner.
+- Keep lines short enough to sing in one breath. If a line carries a fact plus a qualifier, split it or cut the qualifier.
 - The bridge turns: a new perspective, a realisation, or the most tender thing in the song. It never lists facts or recaps the verses. Leave out a priority-2 fact rather than cramming it into the bridge.
 - Before finishing, read every line out loud in your head and rewrite any that sound like prose, have broken grammar, or exist only for the rhyme.
 - Rhyme when it comes naturally; slant rhyme is fine. Never twist word order or choose a weaker word to force a rhyme.
@@ -132,6 +134,7 @@ export type WriteOptions = {
   writerVersion?: "v1" | "v2";
   maxRepairs?: number;
   craftRepairBelow?: number;
+  polishSingabilityBelow?: number;
   /** Force an arrangement (experiments: "standard vs adaptive"). */
   arrangementOverride?: string;
 };
@@ -418,6 +421,7 @@ export async function writeLyrics(opts: WriteOptions): Promise<WriteResult> {
   const sel = resolveArrangements(opts.genre, opts.brief, opts.mood, opts.occasion ?? opts.brief.occasion, opts.arrangementOverride ?? ((opts.writerVersion ?? env.writerVersion) === "v1" ? "legacy_blueprint" : undefined));
   const maxRepairs = opts.maxRepairs ?? env.lyricMaxRepairs;
   const craftBelow = opts.craftRepairBelow ?? env.lyricCraftRepairBelow;
+  const singBelow = opts.polishSingabilityBelow ?? env.lyricPolishSingabilityBelow;
   const attempts: DraftEval[] = [];
   let repairsLeft = maxRepairs;
 
@@ -445,10 +449,14 @@ export async function writeLyrics(opts: WriteOptions): Promise<WriteResult> {
     best = better(best, repaired);
   }
 
-  // 3. Valid but weak: one optional craft pass, only if budget remains.
-  if (!isBlocking(best.issues) && craftBelow > 0 && best.creativeScore !== null && best.creativeScore < craftBelow && repairsLeft > 0) {
+  // 3. Valid but weak, or hard to sing: one optional polish pass, only if budget remains.
+  //    craftRepairBelow 0 turns polishing off entirely.
+  const singability = best.verifier?.scores?.singability?.score ?? null;
+  const weak = best.creativeScore !== null && best.creativeScore < craftBelow;
+  const hardToSing = singBelow > 0 && singability !== null && singability < singBelow;
+  if (!isBlocking(best.issues) && craftBelow > 0 && (weak || hardToSing) && repairsLeft > 0) {
     repairsLeft--;
-    const craftIssues = best.issues.filter((i) => i.category === "craft" && i.severity !== "suggestion");
+    const craftIssues = best.issues.filter((i) => (i.category === "craft" || i.category === "structure") && i.severity !== "suggestion");
     const sections = sectionsNeedingRepair(craftIssues.map((i) => ({ ...i, requiresRewrite: true })), best.verifier?.sectionsToRepair);
     const notes: string[] = [];
     const repairedRaw = await callWriter({ kind: "repair", opts, sel, previous: best, repairSections: sections, craftOnly: true });

@@ -58,6 +58,10 @@ export const env = {
   get lyricCraftRepairBelow(): number {
     return num(process.env.LYRIC_CRAFT_REPAIR_BELOW, 5);
   },
+  /** Also polish when the verifier's singability score (1-10) is below this, whatever the overall score. 0 disables. */
+  get lyricPolishSingabilityBelow(): number {
+    return num(process.env.LYRIC_POLISH_SINGABILITY_BELOW, 7);
+  },
   get briefFactCap(): number {
     return num(process.env.BRIEF_FACT_CAP, 12);
   },
