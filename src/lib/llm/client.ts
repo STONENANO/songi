@@ -75,7 +75,9 @@ export async function structured<S extends z.ZodType>(opts: {
   maxTokens?: number;
 }): Promise<StructuredResult<z.infer<S>>> {
   const anthropic = getClient();
-  const response = await anthropic.beta.messages.parse({
+  // Streamed: large outputs (lyrics with adaptive thinking) exceed the SDK's non-streaming limit.
+  // finalMessage() still returns the complete, schema-parsed response.
+  const stream = anthropic.beta.messages.stream({
     model: env.llmModel,
     max_tokens: opts.maxTokens ?? 16000,
     system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
@@ -83,6 +85,7 @@ export async function structured<S extends z.ZodType>(opts: {
     messages: [{ role: "user", content: opts.user }],
     ...(env.llmRefusalFallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
   });
+  const response = await stream.finalMessage();
 
   if (response.stop_reason === "refusal") {
     throw new LlmRefusalError(response.stop_details?.category ?? null, response.stop_details?.explanation ?? null);
