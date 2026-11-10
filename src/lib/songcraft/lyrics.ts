@@ -61,8 +61,11 @@ Craft
 - One detail per line. Do not cram two facts into one line.
 - Decide in the plan where every priority-1 fact lives before writing a line. A verse can carry two details on separate lines; use that instead of pushing a fact to the end. The outro never introduces a new fact: it only echoes something already sung. A fact whose narrativeRole is closing_callback is planted in a verse first, then called back at the end.
 - Every chorus line has a job. The last chorus line lands the hook; it is never a filler line written to complete a rhyme. If a place name is hard to rhyme, put it mid-line instead of at the end.
+- The chorus must rhyme: at least two line endings rhyme or slant-rhyme, and the hook line sits on one of them. An unrhymed chorus does not stick, however good the idea.
 - Anchor the chorus in at least one concrete image from this story (an object, place or habit), not only abstractions like "same heart, same spark".
 - Verses in the same song have the same number of lines and a matching rhythm.
+- Each detail has one home: one verse, plus the chorus if it is the hook image. Do not repeat the same quirk or image in three places; give the space to another fact.
+- Never fix a leftover fact by tacking an extra line onto the end of a section. Rework the section so the fact sits inside a pair.
 - Lines come in pairs. Every verse, chorus and bridge has an even number of lines (two or four), and each pair rhymes or slant-rhymes. Never leave a line hanging with no partner.
 - Keep lines short enough to sing in one breath. If a line carries a fact plus a qualifier, split it or cut the qualifier.
 - The bridge turns: a new perspective, a realisation, or the most tender thing in the song. It never lists facts or recaps the verses. Leave out a priority-2 fact rather than cramming it into the bridge.
