@@ -38,7 +38,7 @@ Follow-up questions
 - Ask 1 or 2 short, warm questions ONLY when there are fewer than 3 usable facts or the story is entirely generic ("she's the best mom ever"). Ask for a specific memory, a habit, a place, or an inside joke.
 - If follow-up answers are already included, never ask again: return an empty array.
 
-summary: one friendly sentence the customer will see, e.g. "A warm country song for your mom Linda about Sunday pancakes, the lake house, and her off-key car singing."`;
+summary: one friendly sentence the customer will see, e.g. "A warm folk song for your grandma Ruth about Saturday crosswords, the porch swing, and her banjo."`;
 
 export async function extractBrief(input: QuizInput): Promise<Brief> {
   let llm;

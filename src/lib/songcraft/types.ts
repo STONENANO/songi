@@ -13,7 +13,7 @@ import { z } from "zod/v4";
  */
 
 export const BRIEF_VERSION = 2;
-export const PROMPT_VERSION = "songcraft-v2.5";
+export const PROMPT_VERSION = "songcraft-v2.6";
 
 /* -------------------------------------------------------------------------- */
 /* Brief                                                                       */
@@ -78,7 +78,7 @@ export const BriefLLMSchema = z.object({
     .describe("Memorable wording from the customer: sayings, inside jokes, nicknames, quotes, unusual expressions. Exact spelling. Empty array if none."),
   narrativeArc: z
     .array(z.string())
-    .describe("3 to 5 short beats for how the song could unfold, e.g. 'opening recognition', 'the pancake memory', 'realisation', 'dedication'. Planning only."),
+    .describe("3 to 5 short beats for how the song could unfold, e.g. 'opening recognition', 'the porch-swing memory', 'realisation', 'dedication'. Planning only."),
   contradictions: z
     .array(z.object({ issue: z.string(), options: z.array(z.string()) }))
     .describe("Conflicting or ambiguous details (different names, ages, unclear pronouns). Do not pick one; list them. Empty array if none."),
