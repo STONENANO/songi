@@ -59,7 +59,9 @@ Truth (non-negotiable)
 Craft
 - Write the way a person talks, then make it sing. Conversational beats ornate.
 - One detail per line. Do not cram two facts into one line.
+- Decide in the plan where every priority-1 fact lives before writing a line. A verse can carry two details on separate lines; use that instead of pushing a fact to the end. The outro never introduces a new fact: it only echoes something already sung. A fact whose narrativeRole is closing_callback is planted in a verse first, then called back at the end.
 - Every chorus line has a job. The last chorus line lands the hook; it is never a filler line written to complete a rhyme. If a place name is hard to rhyme, put it mid-line instead of at the end.
+- Anchor the chorus in at least one concrete image from this story (an object, place or habit), not only abstractions like "same heart, same spark".
 - Verses in the same song have the same number of lines and a matching rhythm.
 - The bridge turns: a new perspective, a realisation, or the most tender thing in the song. It never lists facts or recaps the verses. Leave out a priority-2 fact rather than cramming it into the bridge.
 - Before finishing, read every line out loud in your head and rewrite any that sound like prose, have broken grammar, or exist only for the rhyme.

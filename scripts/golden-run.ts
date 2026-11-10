@@ -108,7 +108,7 @@ async function main() {
       });
       md += `\n## Arm ${armName} ${JSON.stringify(arm)}: ${c.status}, arrangement ${c.arrangementId} (${result.arrangement.reason})\n\n### ${c.title}\n\n\`\`\`\n${c.displayLyrics}\n\`\`\`\n`;
       if (c.sungLyrics !== c.displayLyrics) md += `\nSung version differs (respelling or numbers):\n\`\`\`\n${c.sungLyrics}\n\`\`\`\n`;
-      md += `\nPlan: ${JSON.stringify(c.lyrics.plan)}\n\nIssues:\n${c.issues.map((i) => `- [${i.severity}/${i.category}/${i.source}] ${i.section ?? ""} ${i.reason}`).join("\n") || "- none"}\n\nNotes: ${c.notes.join(" ") || "none"}\n\nCreative scores: ${JSON.stringify(c.verifier?.scores ?? null)}\n`;
+      md += `\nPlan: ${JSON.stringify(c.lyrics.plan)}\n\nIssues:\n${c.issues.map((i) => `- [${i.severity}/${i.category}/${i.source}] ${i.section ?? ""} ${i.reason}`).join("\n") || "- none"}\n\nAttempts: ${result.attempts.map((a) => `${a.source} (${a.status}, score ${a.creativeScore?.toFixed(2) ?? "-"})`).join(" → ")}\n\nNotes: ${c.notes.join(" ") || "none"}\n\nCreative scores: ${JSON.stringify(c.verifier?.scores ?? null)}\n`;
       md += `\n### Suno style prompts\n${styles.map((s) => `- **${s.label}** (${s.archetype}, ${s.duration ?? "-"}s, ${s.style.length} chars): ${s.style}${s.conflicts.length ? `\n  - conflicts: ${s.conflicts.join(" ")}` : ""}`).join("\n")}\n`;
     }
     fs.writeFileSync(path.join(outDir, file.replace(".json", ".md")), md);
