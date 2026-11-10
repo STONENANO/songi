@@ -15,7 +15,8 @@
     "test:integration": "tsx --test tests/integration/*.test.ts",
     "test:e2e": "node tests/e2e/flow.e2e.cjs",
     "metrics": "tsx scripts/metrics.ts",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "doctor": "tsx scripts/doctor.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",

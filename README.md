@@ -23,6 +23,24 @@ With no keys, everything runs in free mock mode: placeholder lyrics, test-tone a
 
 Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile includes ffmpeg.
 
+### Setting up your keys
+
+1. `npm run doctor -- --fix` creates `.env` if needed and generates the two local signing secrets.
+2. Open `.env` in your editor and paste your keys after the `=` (no quotes, no spaces). Never commit `.env`; it is gitignored.
+3. `npm run doctor` again. It checks each key with free, read-only calls and never prints full secrets.
+
+| Setting | Where to get it |
+|---|---|
+| `ANTHROPIC_API_KEY` | console.anthropic.com → Settings → API keys |
+| `KIE_API_KEY` | kie.ai → API keys (needs credits for real recordings) |
+| `KIE_WEBHOOK_HMAC_KEY` | kie.ai → Settings (production only) |
+| `SHOPIFY_STORE_DOMAIN` | `your-store.myshopify.com` |
+| `SHOPIFY_STOREFRONT_TOKEN` | Shopify admin → Apps → Develop apps → your app → Storefront API access token |
+| `SHOPIFY_SONG_VARIANT_ID` | `gid://shopify/ProductVariant/<number>` of the song product |
+| `SHOPIFY_WEBHOOK_SECRET` | The same app's API secret key (signs webhooks) |
+
+Add keys one at a time. With only `ANTHROPIC_API_KEY` set you get real lyrics and still spend nothing on music.
+
 ## How a song moves
 
 ```
