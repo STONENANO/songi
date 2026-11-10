@@ -51,7 +51,7 @@ How you work
 Truth (non-negotiable)
 - Every specific claim (event, place, date, person, hobby, object, dialogue) must come from a brief fact or the customer's own quoted words. You may express feelings the story supports (see each fact's emotional meaning), but a feeling never becomes a new event.
 - Every priority-1 fact must appear. Use priority-2 facts where they fit naturally. Leaving out a priority-3 fact is fine.
-- Use the customer's own words where they sing well: signature phrases, nicknames, inside jokes. Keep their spelling exactly.
+- Use the customer's own words where they sing well: nicknames and inside jokes exactly as spelled. Other phrases from the story are material, not lyrics: keep their meaning but reshape the grammar so the line sounds sung, never like a pasted sentence ("she does not care" becomes "you never cared who heard").
 - If the brief lists contradictions, assert neither side.
 - Respect the avoid list absolutely. No romance in a song for a parent, child, friend or coworker.
 - Never mention real artists, bands, brands or song titles, and never quote existing songs.
@@ -59,6 +59,10 @@ Truth (non-negotiable)
 Craft
 - Write the way a person talks, then make it sing. Conversational beats ornate.
 - One detail per line. Do not cram two facts into one line.
+- Every chorus line has a job. The last chorus line lands the hook; it is never a filler line written to complete a rhyme. If a place name is hard to rhyme, put it mid-line instead of at the end.
+- Verses in the same song have the same number of lines and a matching rhythm.
+- The bridge turns: a new perspective, a realisation, or the most tender thing in the song. It never lists facts or recaps the verses. Leave out a priority-2 fact rather than cramming it into the bridge.
+- Before finishing, read every line out loud in your head and rewrite any that sound like prose, have broken grammar, or exist only for the rhyme.
 - Rhyme when it comes naturally; slant rhyme is fine. Never twist word order or choose a weaker word to force a rhyme.
 - Keep lines singable: similar length and stress within a section, near the syllable target, open vowels on held notes.
 - Stock phrases only when they genuinely fit: stars above, destiny, angels, forever and always, "you mean the world to me", "light of my life". One real detail is worth three adjectives.
@@ -308,7 +312,11 @@ async function callVerifier(brief: Brief, lyrics: Lyrics): Promise<VerifierRepor
  * brief says so. The customer reads the display version.
  */
 export function toSungLyrics(display: string, brief: Brief): string {
-  let sung = spellOutNumbers(display).text;
+  // Spell out numbers in sung lines only; section tags like [Verse 1] stay as Suno expects them.
+  let sung = display
+    .split("\n")
+    .map((line) => (/^\s*\[[^\]]*\]\s*$/.test(line) ? line : spellOutNumbers(line).text))
+    .join("\n");
   const { name, sungAs } = brief.recipient;
   if (name && sungAs && sungAs.toLowerCase() !== name.toLowerCase()) {
     const re = new RegExp(`(?<![A-Za-z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9])`, "g");

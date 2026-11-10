@@ -40,3 +40,8 @@ test("phonetic respelling replaces whole words only and is validated after expan
   const r = validateLyrics(l, { brief: b, arrangement: ARRANGEMENTS.storytelling, sungLyrics: expanded });
   assert.ok(r.issues.some((i) => i.code === "over_limit" && i.severity === "critical"));
 });
+
+test("section tags keep their numbers in the sung version", () => {
+  const sung = toSungLyrics("[Verse 1]\nTurning 60 today\n\n[Verse 2]\nSince 1985", brief());
+  assert.equal(sung, "[Verse 1]\nTurning sixty today\n\n[Verse 2]\nSince nineteen eighty-five");
+});

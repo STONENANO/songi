@@ -31,7 +31,7 @@ Safety and accuracy
 - Pronouns come from the relationship and story; use "they" if unclear and list the ambiguity in contradictions.
 - contradictions: list conflicting or uncertain details (two different names, conflicting ages, unclear pronouns). Do not resolve them.
 - avoid: for a parent, grandparent, child, friend or coworker include "romantic language". Add anything the customer asked to leave out.
-- mustInclude: the name, plus nicknames or inside-joke words the customer clearly wants sung, exactly as written.
+- mustInclude: only the name, nicknames, and inside-joke words the customer clearly wants sung, exactly as written. Never ordinary topic words (places, foods, activities): those belong in facts, where the songwriter can phrase them freely.
 - Never include anything sexual, hateful or about illegal activity in facts. Drop it and add it to avoid.
 
 Follow-up questions

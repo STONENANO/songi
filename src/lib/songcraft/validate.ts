@@ -135,6 +135,12 @@ export function validateLyrics(input: Lyrics, ctx: ValidateContext): ValidationR
   for (const s of sections.slice(i)) unexpected.push(s.tag);
   for (const t of unexpected) add({ code: "unexpected_section", category: "structure", severity: "warning", section: t, reason: `[${t}] is not part of the ${ctx.arrangement.id} arrangement.` });
 
+  // --- Verses should match each other in length so the melody can repeat.
+  const verseLens = sections.filter((s) => /^verse/i.test(s.tag)).map((s) => s.lines.length);
+  if (verseLens.length > 1 && new Set(verseLens).size > 1) {
+    add({ code: "verse_length_mismatch", category: "craft", severity: "warning", reason: `Verses have different lengths (${verseLens.join(", ")} lines), which makes the melody hard to repeat.`, repair: "Give every verse the same number of lines." });
+  }
+
   // --- Duplicated non-chorus sections (a common generation glitch).
   const seen = new Map<string, string>();
   for (const s of sections) {
