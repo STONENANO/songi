@@ -129,7 +129,7 @@ export const env = {
   },
   /** Estimated Kie cost of one generation task (two tracks). Configurable estimate, not an actual charge. */
   get kieTaskCostUsd(): number {
-    return num(process.env.KIE_TASK_COST_USD, 0.15);
+    return num(process.env.KIE_TASK_COST_USD, 0.065);
   },
   get expectedTracksPerTask(): number {
     return Math.max(1, num(process.env.EXPECTED_TRACKS_PER_TASK, 2));
