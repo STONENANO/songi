@@ -43,3 +43,20 @@ test("silence, short audio, clipping, internal gaps and corrupt or truncated fil
     assert.match(q.reasons.join(" "), re, `${name}: ${q.reasons.join("; ")}`);
   }
 });
+
+test("the delivered MP3 carries the customer's title and lyrics, not the provider's sung respellings", async () => {
+  const { normalizeToMp3, cutPreview, run } = await import("../../src/lib/audio/ffmpeg");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "id3-"));
+  const src = path.join(dir, "src.mp3");
+  await run("ffmpeg", ["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-metadata", "title=Provider Title", "-metadata", "lyrics-eng=Shiv-awn, sit back", "-c:a", "libmp3lame", src]);
+  const full = path.join(dir, "full.mp3");
+  await normalizeToMp3(src, full, { title: "Porch Light Song", lyrics: "[Chorus]\nSiobhan, sit back" });
+  const tags = async (f: string) => (await run("ffprobe", ["-v", "error", "-show_entries", "format_tags", "-of", "json", f])).stdout;
+  const t = await tags(full);
+  assert.match(t, /Porch Light Song/);
+  assert.match(t, /Siobhan, sit back/);
+  assert.doesNotMatch(t, /Shiv-awn|Provider Title/);
+  const prev = path.join(dir, "preview.mp3");
+  await cutPreview(src, prev, 0, 2);
+  assert.doesNotMatch(await tags(prev), /Shiv-awn|Provider Title/);
+});

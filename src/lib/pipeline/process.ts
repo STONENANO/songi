@@ -72,7 +72,7 @@ export async function processTrack(opts: { request: SongRequest; generation: Gen
 
     const full = path.join(tmp, "full.mp3");
     const preview = path.join(tmp, "preview.mp3");
-    await normalizeToMp3(raw, full);
+    await normalizeToMp3(raw, full, { title: draft.title, lyrics: draft.displayLyrics });
     const duration = await probeDuration(full);
 
     let aligned: AlignedWord[] | null = null;

@@ -57,9 +57,16 @@ export async function probeDuration(file: string): Promise<number> {
   return d;
 }
 
-/** Loudness-normalise to a streaming-friendly level and re-encode as MP3. */
-export async function normalizeToMp3(src: string, dest: string): Promise<void> {
-  await run("ffmpeg", ["-y", "-i", src, "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-codec:a", "libmp3lame", "-q:a", "2", dest]);
+/**
+ * Loudness-normalise to a streaming-friendly level and re-encode as MP3.
+ * The provider's tags are dropped (they carry the sung lyrics, with phonetic
+ * respellings like "Shiv-awn" for Siobhan); the customer's title and lyrics go in instead.
+ */
+export async function normalizeToMp3(src: string, dest: string, meta: { title?: string; lyrics?: string } = {}): Promise<void> {
+  const tags: string[] = ["-map_metadata", "-1"];
+  if (meta.title) tags.push("-metadata", `title=${meta.title}`);
+  if (meta.lyrics) tags.push("-metadata", `lyrics-eng=${meta.lyrics}`);
+  await run("ffmpeg", ["-y", "-i", src, ...tags, "-id3v2_version", "3", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-codec:a", "libmp3lame", "-q:a", "2", dest]);
 }
 
 /** Cut a preview with short fades. */
@@ -73,6 +80,8 @@ export async function cutPreview(src: string, dest: string, start: number, secon
     seconds.toFixed(2),
     "-i",
     src,
+    "-map_metadata",
+    "-1",
     "-af",
     `afade=t=in:st=0:d=${fade},afade=t=out:st=${(seconds - fade).toFixed(2)}:d=${fade}`,
     "-codec:a",
