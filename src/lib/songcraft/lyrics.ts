@@ -206,6 +206,8 @@ export type WriteOptions = {
   maxRepairs?: number;
   craftRepairBelow?: number;
   polishSingabilityBelow?: number;
+  /** First drafts to write in parallel (1 or 2); the best is kept. Defaults to LYRIC_DRAFTS. */
+  drafts?: number;
   /** Force an arrangement (experiments: "standard vs adaptive"). */
   arrangementOverride?: string;
 };
@@ -501,9 +503,17 @@ export async function writeLyrics(opts: WriteOptions): Promise<WriteResult> {
   const attempts: DraftEval[] = [];
   let repairsLeft = maxRepairs;
 
-  const first = await evaluate(await callWriter({ kind: "write", opts, sel }), opts, sel, opts.variation ? "regenerated" : "generated");
-  attempts.push(first);
-  let best = first;
+  // Best of N first drafts, written in parallel so the customer waits no longer.
+  // The second draft is pushed to a different angle so the two are worth comparing.
+  const n = opts.writerVersion === "v1" || (opts.writerVersion ?? env.writerVersion) === "v1" ? 1 : Math.max(1, Math.min(2, opts.drafts ?? env.lyricDrafts));
+  const firsts = await Promise.all(
+    Array.from({ length: n }, (_, i) => {
+      const o = i === 0 ? opts : { ...opts, variation: true };
+      return callWriter({ kind: "write", opts: o, sel }).then((raw) => evaluate(raw, opts, sel, o.variation ? "regenerated" : "generated"));
+    }),
+  );
+  attempts.push(...firsts);
+  let best = firsts.reduce((a, b) => better(a, b));
 
   // 1. Over the provider limit: one targeted shortening pass (counts as a repair).
   if (best.issues.some((i) => i.code === "over_limit") && repairsLeft > 0) {

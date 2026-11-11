@@ -228,6 +228,8 @@ export default function SongView({ id }: { id: string }) {
         </div>
       )}
 
+      {showGallery && <FeedbackCard id={id} versionId={selected?.id ?? null} given={view.feedback} />}
+
       {view.brief && view.status !== "needs_input" && (
         <div className="card">
           <p style={{ margin: 0 }}>{view.brief.summary}</p>
@@ -334,6 +336,64 @@ export default function SongView({ id }: { id: string }) {
 
       {error && <p className="err">{error}</p>}
       <p className="muted" style={{ fontSize: 12, marginTop: 32 }}>Request {view.id}</p>
+    </div>
+  );
+}
+
+const RATINGS = [
+  { n: 1, label: "Not for me" },
+  { n: 2, label: "Meh" },
+  { n: 3, label: "Nice" },
+  { n: 4, label: "Loved it" },
+  { n: 5, label: "Gave me chills" },
+];
+
+/** MVP test feedback: how the song landed, and whether the tester would pay for it. */
+function FeedbackCard({ id, versionId, given }: { id: string; versionId: string | null; given: RequestView["feedback"] }) {
+  const [rating, setRating] = useState<number | null>(given?.rating ?? null);
+  const [wouldPay, setWouldPay] = useState<"yes" | "maybe" | "no" | null>(given?.wouldPay ?? null);
+  const [note, setNote] = useState(given?.note ?? "");
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(given ? "sent" : "idle");
+
+  async function send() {
+    if (!rating) return;
+    setState("sending");
+    const res = await fetch(`/api/requests/${id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating, wouldPay, note, versionId }) });
+    setState(res.ok ? "sent" : "error");
+  }
+
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>How did it land?</h2>
+      <p className="muted" style={{ marginTop: 0 }}>We're testing this. Your honest reaction helps more than anything.</p>
+      <div className="chips">
+        {RATINGS.map((r) => (
+          <button key={r.n} type="button" className={`chip ${rating === r.n ? "on" : ""}`} onClick={() => { setRating(r.n); setState("idle"); }} aria-pressed={rating === r.n}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <p style={{ marginBottom: 6 }}>Would you pay $45 for this as a gift?</p>
+      <div className="chips">
+        {(["yes", "maybe", "no"] as const).map((w) => (
+          <button key={w} type="button" className={`chip ${wouldPay === w ? "on" : ""}`} onClick={() => { setWouldPay(w); setState("idle"); }} aria-pressed={wouldPay === w}>
+            {w === "yes" ? "Yes" : w === "maybe" ? "Maybe" : "No"}
+          </button>
+        ))}
+      </div>
+      <textarea
+        style={{ marginTop: 12, minHeight: 80 }}
+        rows={3}
+        placeholder="Anything that felt off, or a line you loved? (optional)"
+        value={note}
+        onChange={(e) => { setNote(e.target.value); setState("idle"); }}
+      />
+      <div className="row" style={{ marginTop: 12, alignItems: "center" }}>
+        <button className="btn" disabled={!rating || state === "sending" || state === "sent"} onClick={send}>
+          {state === "sent" ? "Thanks, saved" : state === "sending" ? "Saving…" : "Send feedback"}
+        </button>
+        {state === "error" && <span className="err">Couldn't save that. Try again.</span>}
+      </div>
     </div>
   );
 }

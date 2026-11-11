@@ -36,6 +36,10 @@ function fixSecrets() {
     set("MEDIA_SIGNING_SECRET", crypto.randomBytes(32).toString("hex"));
     out("ok", "fix", "Generated MEDIA_SIGNING_SECRET in .env");
   }
+  if (!process.env.ADMIN_TOKEN) {
+    set("ADMIN_TOKEN", crypto.randomBytes(16).toString("hex"));
+    out("ok", "fix", "Generated ADMIN_TOKEN in .env (opens /admin?token=...)");
+  }
   if (!process.env.KIE_WEBHOOK_SECRET || process.env.KIE_WEBHOOK_SECRET === "change-me") {
     set("KIE_WEBHOOK_SECRET", crypto.randomBytes(24).toString("hex"));
     out("ok", "fix", "Generated KIE_WEBHOOK_SECRET in .env");
@@ -122,6 +126,9 @@ async function checkPlatform() {
   }
   if (!process.env.MEDIA_SIGNING_SECRET) out(env.isProd ? "fail" : "warn", "Media", "MEDIA_SIGNING_SECRET not set (a dev default is used locally). Run `npm run doctor -- --fix`.");
   else out("ok", "Media", `MEDIA_SIGNING_SECRET set ${mask(process.env.MEDIA_SIGNING_SECRET)}.`);
+  if (!process.env.ADMIN_TOKEN) out(env.isProd ? "fail" : "warn", "Admin", "ADMIN_TOKEN not set: /admin is open on this machine only (closed in production). Run `npm run doctor -- --fix`.");
+  else out("ok", "Admin", "ADMIN_TOKEN set. Open /admin?token=<ADMIN_TOKEN> to see every test song and its feedback.");
+  out("ok", "Writer", `Songwriter ${env.writerVersion}, ${env.lyricDrafts} first draft(s) per song.`);
   if (env.databaseUrl) {
     try {
       const postgres = (await import("postgres")).default;

@@ -179,9 +179,21 @@ export const costLedger = pgTable("cost_ledger", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** Tester reactions, collected on the song page during the MVP test. */
+export const feedback = pgTable("feedback", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requestId: uuid("request_id").references(() => songRequests.id, { onDelete: "cascade" }).notNull(),
+  versionId: uuid("version_id").references(() => songVersions.id, { onDelete: "set null" }),
+  rating: integer("rating").notNull(),
+  wouldPay: text("would_pay").$type<"yes" | "maybe" | "no" | null>(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type AlignedWord = { word: string; startS: number; endS: number; success: boolean };
 export type SongRequest = typeof songRequests.$inferSelect;
 export type LyricDraft = typeof lyricDrafts.$inferSelect;
 export type Generation = typeof generations.$inferSelect;
 export type SongVersion = typeof songVersions.$inferSelect;
 export type Order = typeof orders.$inferSelect;
+export type Feedback = typeof feedback.$inferSelect;

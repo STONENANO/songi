@@ -66,6 +66,22 @@ draft → briefing → (needs_input) → writing_lyrics → lyrics_ready
 | `npm run metrics` | Business metrics from the database |
 | `npm run typecheck` | TypeScript |
 
+## Testing with real people (MVP)
+
+1. Check setup: `npm run doctor -- --fix` (generates `ADMIN_TOKEN` and the signing secrets if missing).
+   In `.env`, keep `SONGCRAFT_WRITER=v3` (or delete the line) and `LYRIC_DRAFTS=2`.
+2. Start the app: `npm run dev`, then open http://localhost:4747/create.
+3. Make the song with the tester's real story (with their permission). Lyrics take about one to two minutes;
+   recording three takes takes about two to four more. You can leave the page and come back.
+4. Play the takes for the person the song is for. Each song page has a "How did it land?" box:
+   a reaction, "would you pay $45?", and a note. Fill it in with what they said.
+5. See every test song in one place at http://localhost:4747/admin?token=YOUR_ADMIN_TOKEN:
+   lyrics, all takes (full audio), checker notes, cost and feedback.
+6. Checkout is in test mode until Shopify is connected: "Pay (test)" unlocks the download without charging.
+
+Each song costs roughly $0.50 to $0.80 in Claude calls (two first drafts, checks, sometimes a polish pass) plus two
+Kie tasks for three takes. Note your Kie credits before and after the first song.
+
 ## Production checklist
 
 - Set `MEDIA_SIGNING_SECRET`, `KIE_WEBHOOK_SECRET` and `KIE_WEBHOOK_HMAC_KEY` (from kie.ai settings).

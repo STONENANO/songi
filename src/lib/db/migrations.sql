@@ -160,4 +160,15 @@ CREATE TABLE IF NOT EXISTS webhook_receipts (
   source text NOT NULL,
   topic text,
   received_at timestamptz NOT NULL DEFAULT now()
-)
+);
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id uuid NOT NULL REFERENCES song_requests(id) ON DELETE CASCADE,
+  version_id uuid REFERENCES song_versions(id) ON DELETE SET NULL,
+  rating integer NOT NULL,
+  would_pay text,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS feedback_request_idx ON feedback(request_id)

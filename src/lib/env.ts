@@ -47,10 +47,18 @@ export const env = {
   },
 
   /* ---------------- Songcraft ---------------- */
-  /** "v2" (default), "v3" (idea-first writer, under evaluation) or "v1" (the original writer). */
+  /** "v3" (default, idea-first writer), "v2" or "v1" (earlier writers, kept for A/B tests). */
   get writerVersion(): WriterVersion {
     const v = process.env.SONGCRAFT_WRITER;
-    return v === "v1" || v === "v3" ? v : "v2";
+    return v === "v1" || v === "v2" ? v : "v3";
+  },
+  /** First drafts written per song (in parallel); the best verified one is kept. 1 or 2. */
+  get lyricDrafts(): number {
+    return Math.max(1, Math.min(2, num(process.env.LYRIC_DRAFTS, 2)));
+  },
+  /** Opens /admin. Required in production; optional locally. */
+  get adminToken(): string {
+    return process.env.ADMIN_TOKEN ?? "";
   },
   /** Automatic lyric repair passes after the first draft. */
   get lyricMaxRepairs(): number {

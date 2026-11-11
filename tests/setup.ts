@@ -23,6 +23,8 @@ Object.assign(process.env, {
   KIE_WEBHOOK_SECRET: "test-kie-secret",
   APP_URL: "http://localhost:4747",
   NODE_ENV: "test",
+  LYRIC_DRAFTS: "1",
+  SONGCRAFT_WRITER: "v2",
 });
 
 export const TEST_STORAGE_DIR = storage;

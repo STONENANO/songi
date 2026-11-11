@@ -6,6 +6,7 @@
  *   npm run golden -- --only mom                     # fixtures whose name starts with "mom"
  *   npm run golden -- --a writer=v1 --b writer=v2    # A/B: one variable at a time
  *   npm run golden -- --a writer=v2 --b writer=v3    # idea-first writer vs current
+ *   npm run golden -- --a drafts=1 --b drafts=2      # one first draft vs best of two
  *   npm run golden -- --a arrangement=legacy_blueprint --b arrangement=adaptive
  *   npm run golden -- --a direction=legacy --b direction=director   (style prompts only)
  *   npm run golden -- --json data/golden-out/run.json
@@ -22,7 +23,7 @@ import { extractBrief, writeLyrics, getGenre, buildKieInput, genreArchetypes, co
 import { withUsage } from "../src/lib/llm/client";
 import { env } from "../src/lib/env";
 
-type Arm = { writer?: "v1" | "v2" | "v3"; arrangement?: string; direction?: "director" | "legacy"; vocal?: "specific" | "generic" };
+type Arm = { writer?: "v1" | "v2" | "v3"; drafts?: string; arrangement?: string; direction?: "director" | "legacy"; vocal?: "specific" | "generic" };
 
 function parseArm(s: string | undefined): Arm {
   const arm: Arm = {};
@@ -75,7 +76,7 @@ async function main() {
     for (const [armName, arm] of arms) {
       const genre = getGenre(input.genreKey);
       const { result, usage } = await withUsage(() =>
-        writeLyrics({ brief, genre, mood: input.mood, occasion: input.occasion, writerVersion: arm.writer, arrangementOverride: arm.arrangement === "adaptive" ? undefined : arm.arrangement }),
+        writeLyrics({ brief, genre, mood: input.mood, occasion: input.occasion, writerVersion: arm.writer, drafts: arm.drafts ? Number(arm.drafts) : undefined, arrangementOverride: arm.arrangement === "adaptive" ? undefined : arm.arrangement }),
       );
       const c = result.chosen;
       const counts = countIssues(c.issues);

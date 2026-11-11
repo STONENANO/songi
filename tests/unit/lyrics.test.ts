@@ -141,3 +141,18 @@ test("writer v3 drafts map onto the shared contract and keep their plan", async 
   const { result } = await withUsage(() => writeLyrics({ brief: brief(), genre: country, mood: null, writerVersion: "v3", maxRepairs: 1, craftRepairBelow: 0 }));
   assert.match(result.chosen.promptVersion, /\/v3$/);
 });
+
+test("best of two first drafts: both are written, the stronger verified one is kept", async () => {
+  let call = 0;
+  songcraftHooks.writer = () => goodLyrics({ title: call === 0 ? "Linda, the Song in the Car" : "Linda, the Song in the Car" });
+  songcraftHooks.verifier = () => {
+    call++;
+    const s = (n: number) => ({ score: n, why: "" });
+    const v = call === 1 ? 6 : 9;
+    return report({}, { scores: { emotionalImpact: s(v), personalSpecificity: s(v), hookMemorability: s(v), singability: s(v), genreFit: s(v) } });
+  };
+  const { result } = await withUsage(() => writeLyrics({ brief: brief(), genre: country, mood: null, drafts: 2, maxRepairs: 0, craftRepairBelow: 0 }));
+  assert.equal(result.attempts.length, 2);
+  assert.equal(result.chosen.creativeScore, 9);
+  assert.equal(result.chosen.status, "verified");
+});

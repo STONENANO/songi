@@ -14,7 +14,7 @@ import { canSubmitTask, budgetConfig } from "./generation";
 import { getRequest, logEvent } from "./common";
 import type { Access } from "../session/project";
 
-const { lyricDrafts, songVersions, generations, orders, songRequests } = schema;
+const { lyricDrafts, songVersions, generations, orders, songRequests, feedback } = schema;
 
 type IssueView = { severity: string; category: string; section?: string; line?: string; reason: string };
 
@@ -28,6 +28,7 @@ export async function getRequestView(requestId: string, access: Access = "owner"
   const versions = await db.select().from(songVersions).where(eq(songVersions.requestId, requestId)).orderBy(desc(songVersions.createdAt));
   const gens = await db.select().from(generations).where(eq(generations.requestId, requestId));
   const orderRows = await db.select().from(orders).where(eq(orders.requestId, requestId)).orderBy(desc(orders.createdAt));
+  const [lastFeedback] = await db.select().from(feedback).where(eq(feedback.requestId, requestId)).orderBy(desc(feedback.createdAt)).limit(1);
 
   // Legacy projects (pre-v2) never ran candidate selection: show their ready versions.
   const legacy = r.status === "preview_ready" && !r.candidatesFinalizedAt && !versions.some((v) => v.offered);
@@ -128,6 +129,7 @@ export async function getRequestView(requestId: string, access: Access = "owner"
         : orderRows.some((o) => o.status === "paid_unfulfilled")
           ? { status: "paid_unfulfilled" as const, versionId: orderRows.find((o) => o.status === "paid_unfulfilled")!.versionId, deliveryLink: null }
           : null,
+    feedback: lastFeedback ? { rating: lastFeedback.rating, wouldPay: lastFeedback.wouldPay, note: lastFeedback.note } : null,
     priceLabel: env.shopify.priceLabel,
     mock: { llm: env.mockLlm, kie: env.mockKie, shopify: env.mockShopify },
   };
