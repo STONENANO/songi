@@ -1,5 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod/v4";
+import { and, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { env } from "@/lib/env";
 import { GENRES } from "@/lib/songcraft";
@@ -29,8 +30,16 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues.map((i) => i.message).join(" ") }, { status: 400 });
   const b = parsed.data;
-  const { token, hash } = newProjectToken();
   const db = await getDb();
+  // Site-wide daily cap: every song costs real API money, and the test site is open to anyone.
+  if (env.maxSongsPerDay > 0) {
+    const since = new Date(Date.now() - 24 * 60 * 60_000);
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.songRequests).where(and(gte(schema.songRequests.createdAt, since)));
+    if (n >= env.maxSongsPerDay) {
+      return NextResponse.json({ error: "We've reached today's limit for new songs while we're testing. Please try again tomorrow." }, { status: 429 });
+    }
+  }
+  const { token, hash } = newProjectToken();
   const [row] = await db
     .insert(schema.songRequests)
     .values({

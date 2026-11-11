@@ -49,3 +49,36 @@ test("admin is open locally without a token, and needs the exact token once one 
   if (before === undefined) delete process.env.ADMIN_TOKEN;
   else process.env.ADMIN_TOKEN = before;
 });
+
+test("daily cap: new songs are refused once the site-wide limit for 24 hours is reached", async () => {
+  const { POST: createPOST } = await import("../../src/app/api/requests/route");
+  const db = await getDb();
+  const { sql } = await import("drizzle-orm");
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.songRequests);
+  const before = process.env.MAX_SONGS_PER_DAY;
+  const make = () =>
+    createPOST(new Request("http://localhost/api/requests", { method: "POST", headers: { "Content-Type": "application/json", "x-forwarded-for": "10.9.9.9" }, body: JSON.stringify({ relationship: "friend", occasion: "birthday", story: "She bakes bread every Saturday morning.", genreKey: "pop" }) }));
+  process.env.MAX_SONGS_PER_DAY = String(n + 1);
+  await project(); // one more song today reaches the cap
+  const refused = await make();
+  assert.equal(refused.status, 429, "at the cap");
+  assert.match(((await refused.json()) as { error: string }).error, /today's limit/);
+  if (before === undefined) delete process.env.MAX_SONGS_PER_DAY;
+  else process.env.MAX_SONGS_PER_DAY = before;
+});
+
+test("free downloads: the test checkout is closed on a live server unless FREE_DOWNLOADS is on", async () => {
+  const { env } = await import("../../src/lib/env");
+  const keep = { NODE_ENV: process.env.NODE_ENV, FREE_DOWNLOADS: process.env.FREE_DOWNLOADS };
+  const set = (k: string, v: string | undefined) => (v === undefined ? delete (process.env as Record<string, string | undefined>)[k] : ((process.env as Record<string, string>)[k] = v));
+  set("NODE_ENV", "test");
+  assert.equal(env.testCheckoutAllowed, true, "local: allowed");
+  set("NODE_ENV", "production");
+  set("FREE_DOWNLOADS", undefined);
+  assert.equal(env.testCheckoutAllowed, false, "live, no flag: closed");
+  set("FREE_DOWNLOADS", "true");
+  assert.equal(env.testCheckoutAllowed, true, "live, free mode: open");
+  assert.equal(env.freeDownloads, true);
+  set("NODE_ENV", keep.NODE_ENV);
+  set("FREE_DOWNLOADS", keep.FREE_DOWNLOADS);
+});

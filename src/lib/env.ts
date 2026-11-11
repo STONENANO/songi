@@ -210,6 +210,21 @@ export const env = {
   },
   /** Secret used to sign simulated webhooks in mock mode (never used when real Shopify is configured). */
   mockShopifyWebhookSecret: "mock-shopify-webhook-secret",
+  /**
+   * Test phase on a live server: no Shopify yet, so the checkout step unlocks the
+   * song for free. Only meaningful while Shopify is not configured.
+   */
+  get freeDownloads(): boolean {
+    return flag(process.env.FREE_DOWNLOADS) && this.mockShopify;
+  },
+  /** The test checkout page works locally, and on a live server only in free-download mode. */
+  get testCheckoutAllowed(): boolean {
+    return this.mockShopify && (!this.isProd || this.freeDownloads);
+  },
+  /** Site-wide cap on new songs per rolling 24 hours (protects the API bill). 0 = no cap. */
+  get maxSongsPerDay(): number {
+    return num(process.env.MAX_SONGS_PER_DAY, 40);
+  },
 };
 
 export function assertSafeForProduction(): void {

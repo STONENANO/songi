@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  * including HMAC verification and de-duplication.
  */
 export async function POST(req: Request) {
-  if (!env.mockShopify || env.isProd) return NextResponse.json({ error: "Not available" }, { status: 404 });
+  if (!env.testCheckoutAllowed) return NextResponse.json({ error: "Not available" }, { status: 404 });
   const parsed = z.object({ orderId: z.string().uuid(), deliveries: z.number().int().min(1).max(3).optional() }).safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
   const db = await getDb();

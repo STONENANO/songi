@@ -91,7 +91,7 @@ export default function SongView({ id }: { id: string }) {
 
   return (
     <div>
-      {(view.mock.llm || view.mock.kie || view.mock.shopify) && (
+      {view.mock.banner && (view.mock.llm || view.mock.kie || view.mock.shopify) && (
         <div className="banner">
           Test mode:{" "}
           {[view.mock.llm && "placeholder lyrics", view.mock.kie && "test-tone audio", view.mock.shopify && "test checkout"].filter(Boolean).join(", ")}. Add API keys in .env for real songs and payments.

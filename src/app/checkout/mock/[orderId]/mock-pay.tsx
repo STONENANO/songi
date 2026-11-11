@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export default function MockPay({ orderId, requestId, alreadyPaid }: { orderId: string; requestId: string; alreadyPaid: boolean }) {
+export default function MockPay({ orderId, requestId, alreadyPaid, free = false }: { orderId: string; requestId: string; alreadyPaid: boolean; free?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(alreadyPaid ? "This order is already completed." : null);
   async function pay() {
@@ -19,7 +19,7 @@ export default function MockPay({ orderId, requestId, alreadyPaid }: { orderId: 
   return (
     <div className="row" style={{ marginTop: 12 }}>
       <button className="btn" disabled={busy || alreadyPaid} onClick={pay}>
-        {busy ? "Paying…" : "Pay (test)"}
+        {busy ? (free ? "Unlocking…" : "Paying…") : free ? "Get my song" : "Pay (test)"}
       </button>
       <a className="btn secondary" href={`/r/${requestId}`} style={{ textDecoration: "none" }}>
         Back to my song
