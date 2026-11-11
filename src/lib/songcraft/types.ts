@@ -13,7 +13,7 @@ import { z } from "zod/v4";
  */
 
 export const BRIEF_VERSION = 2;
-export const PROMPT_VERSION = "songcraft-v2.6";
+export const PROMPT_VERSION = "songcraft-v2.7";
 
 /* -------------------------------------------------------------------------- */
 /* Brief                                                                       */
@@ -276,6 +276,7 @@ export const SongPlanV3Schema = z.object({
     )
     .describe("One box per verse and bridge. Every priority-1 fact appears in exactly one box."),
   reframe: z.string().describe("What the final chorus means that the first chorus did not, because of the bridge or last verse."),
+  bridgeLine: z.string().describe("The single most tender or surprising line in the song, the one the listener will quote back. The bridge is built around it."),
   payoff: z.string().describe("What the listener should feel at the end."),
   ending: z.string().describe("How the outro resolves: a callback to something already sung, never a new fact."),
 });

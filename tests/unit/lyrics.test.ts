@@ -128,6 +128,7 @@ test("writer v3 drafts map onto the shared contract and keep their plan", async 
         { section: "Verse 2", idea: "Off-key at the lake", factIds: ["fact_02"] },
       ],
       reframe: "The last chorus becomes a thank-you.",
+      bridgeLine: "Every good thing started with you.",
       payoff: "Seen.",
       ending: "Echo the hook.",
     },

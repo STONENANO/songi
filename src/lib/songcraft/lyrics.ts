@@ -113,7 +113,7 @@ Write three hook ideas of different kinds, then judge each honestly:
 Judge in this order. First: could a stranger have written it for anyone? Then it is a label ("you always come through", "you're always there"), and it loses to any option only this story could own. Second: would a person actually say it out loud? Third: does it sing (about seven words or fewer, ending on a stressed syllable)? A distinctive hook that sings awkwardly is fixed by rephrasing it, never by switching to a safer, generic one. The winner becomes the title.
 
 2. Fill the boxes
-Each verse and the bridge is a box holding one idea. Put every priority-1 fact in exactly one box; a box can hold two details on separate lines. Each detail has one home: its verse, plus the chorus only if it is the hook image. Never repeat a quirk in three places. Decide what the final chorus will mean that the first one did not (reframe): the bridge or last verse should change how the hook lands. Where the arrangement allows it, change one or two lines of the final chorus to make the turn audible (for example, the singer joins in, or "you" becomes "we").
+Each verse and the bridge is a box holding one idea. Put every priority-1 fact in exactly one box. A box can hold a second detail only if it belongs to the same scene; two unrelated facts joined with "and" are a list, so give the second one its own box or leave a priority-2 fact out. Each detail has one home: its verse, plus the chorus only if it is the hook image. Never repeat a quirk in three places. Decide what the final chorus will mean that the first one did not (reframe): the bridge or last verse should change how the hook lands. Where the arrangement allows it, change lines of the final chorus to make the turn audible (for example, the singer joins in, or "you" becomes "we"), but keep the hook line word for word and the same number of lines; otherwise the change is thrown away.
 
 3. Write the chorus first
 The chorus is the feeling the verses prove. Put the hook in its first or last line (or both); use the recipient's name naturally in the first or second line. Make it stable: an even number of lines, matched lengths, a clear rhyme on the hook line, one concrete image from the story so it is not only abstract. Its lines are shorter and punchier than the verse lines. End lines on words that can be held: open vowels (you, home, go, free, day), not clusters (it's, kissed, strengths).
@@ -122,7 +122,7 @@ The chorus is the feeling the verses prove. Put the hook in its first or last li
 Verses show scenes; they do not explain feelings the chorus will say. Every verse line shows an action, an object, a place or a spoken line; a line like "you always cared so much" explains, so replace it. The last line of each verse leads straight into the chorus's first line, so the chorus lands as the answer. Melodic math: every later verse is sung to verse 1's melody, so it has the same number of lines, and line n has the same syllable count (within one or two) and the same stress pattern and rhyme scheme as line n of verse 1. Lines come in rhyming pairs.
 
 5. Write the bridge as the turn
-Two or four lines, different in rhythm and angle from the verses: a realisation, the most tender thing, the inside joke paying off, or a wish. It never lists or recaps facts. It is what makes the last chorus hit harder.
+First decide the bridge line (bridgeLine in the plan): the single most tender or surprising line in the song, the one the listener will quote back. Build the bridge around it: four lines where the arrangement allows (two only when it allows no more), different in rhythm and angle from the verses. A realisation, the debt finally named, the inside joke revealing what it always meant. Never a list or recap of facts, and never greeting-card filler ("here's to many more", "so much more than words can say"). It is what makes the last chorus hit harder.
 
 6. Outro
 One or two lines that echo the hook or something already sung. Never a new fact.
@@ -140,7 +140,7 @@ Rap and hip-hop: the verses are bars, so density, internal rhyme and multisyllab
 
 Follow the chosen arrangement's sections, order and line ranges. Write every chorus out in full each time it appears.
 
-Output: plan (thesis, shape, hookOptions, hookConcept, centralDetail, boxes, reframe, payoff, ending), arrangementId, title, sections, factPlacement (every fact id you used and the exact line carrying it), namePlacementNote.`;
+Output: plan (thesis, shape, hookOptions, hookConcept, centralDetail, boxes, reframe, bridgeLine, payoff, ending), arrangementId, title, sections, factPlacement (every fact id you used and the exact line carrying it), namePlacementNote.`;
 
 /** The original v1 writer prompt, kept verbatim for A/B comparison (SONGCRAFT_WRITER=v1). */
 export const LYRICIST_SYSTEM_V1 = `You are a professional songwriter who writes personalised gift songs that will be sung by an AI music model. You write from a structured brief and a strict blueprint.

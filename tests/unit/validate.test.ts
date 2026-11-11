@@ -158,3 +158,21 @@ test("a chorus much wordier than the verses gets a suggestion", () => {
   assert.ok(i);
   assert.equal(i!.severity, "suggestion");
 });
+
+test("a final chorus that rewrites three lines but keeps its hook line survives; one that drops the hook is reset and flagged", () => {
+  const base = goodLyrics({ title: "Linda, Never Alone" });
+  const withFinal = (final: string[]) => {
+    const l = goodLyrics({ title: "Linda, Never Alone" });
+    l.sections = l.sections.map((s, i) => (i === 5 ? { ...s, lines: final } : s));
+    return l;
+  };
+  const keep = withFinal(["Linda, I'm the song in the car", "Off-key with you wherever you are", "Every Sunday I'm bringing you home", base.sections[1].lines[3]]);
+  const r1 = validateLyrics(keep, ctx(keep));
+  assert.equal(r1.lyrics.sections[5].lines[0], "Linda, I'm the song in the car");
+  assert.equal(r1.issues.filter((i) => i.code === "final_chorus_reset").length, 0);
+
+  const drop = withFinal(["Linda, I'm the song in the car", "Off-key with you wherever you are", "Every Sunday I'm bringing you home", "And now we sing it on our own"]);
+  const r2 = validateLyrics(drop, ctx(drop));
+  assert.deepEqual(r2.lyrics.sections[5].lines, base.sections[1].lines);
+  assert.ok(r2.issues.some((i) => i.code === "final_chorus_reset"));
+});

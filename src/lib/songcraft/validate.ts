@@ -48,6 +48,16 @@ export function titleWords(title: string, brief: Brief): string[] {
   return words(title.replace(/\([^)]*\)/g, " ")).filter((w) => !names.includes(w) && !TITLE_FILLER.has(w));
 }
 
+/** The chorus line that carries the title (the hook); the last line when the title is just the name. */
+export function hookLineIndex(chorus: string[], title: string, brief: Brief): number {
+  const core = titleWords(title, brief);
+  if (core.length) {
+    const i = chorus.findIndex((l) => containsMost(l, core));
+    if (i >= 0) return i;
+  }
+  return chorus.length - 1;
+}
+
 /** True when the line contains at least 70% of the given words. */
 function containsMost(line: string, wanted: string[]): boolean {
   const have = new Set(words(line));
@@ -107,10 +117,15 @@ export function validateLyrics(input: Lyrics, ctx: ValidateContext): ValidationR
       const cur = sections[idx].lines;
       const same = cur.length === first.length && cur.every((l, j) => l === first[j]);
       if (same) return;
-      const diff = cur.filter((l, j) => l !== first[j]).length + Math.abs(cur.length - first.length);
-      if (isFinal && ctx.arrangement.chorus.repeat === "final_may_lift" && diff <= 2 && cur.length === first.length) return;
+      // A lifted final chorus lands the song's turn. It keeps its shape and its hook line word for word;
+      // the other lines may change.
+      const hook = hookLineIndex(first, input.title, ctx.brief);
+      if (isFinal && ctx.arrangement.chorus.repeat === "final_may_lift" && cur.length === first.length && cur[hook] === first[hook]) return;
       sections[idx] = { ...sections[idx], lines: [...first] };
       notes.push(`Chorus ${k + 2} differed from the first chorus and was made identical.`);
+      if (isFinal && ctx.arrangement.chorus.repeat === "final_may_lift") {
+        add({ code: "final_chorus_reset", category: "craft", severity: "warning", section: sections[idx].tag, reason: "The final chorus was rewritten without keeping its hook line (or changed length), so it was reset to the first chorus and the planned turn was lost.", repair: `In the final chorus keep "${first[hook]}" word for word and the same number of lines; change only the other lines.` });
+      }
     });
   }
   const lyrics: Lyrics = { ...input, sections };
