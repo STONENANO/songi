@@ -205,3 +205,10 @@ export type Generation = typeof generations.$inferSelect;
 export type SongVersion = typeof songVersions.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Feedback = typeof feedback.$inferSelect;
+
+/** Fixed-window rate-limit counters (see src/lib/http/rate-limit.ts). The key is a SHA-256 hash. */
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull(),
+});

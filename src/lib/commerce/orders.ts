@@ -19,6 +19,7 @@ import { getStorage } from "../storage";
 import { assertSafeAudioUrl } from "../kie/client";
 import { downloadToFile, normalizeToMp3 } from "../audio/ffmpeg";
 import { logEvent, setStatus } from "../pipeline/common";
+import { reportError, reportIssue } from "../observability";
 import { createCheckoutSession, retrieveCheckoutSession, retrieveIntent, verifyEvent, type Stripe } from "./stripe";
 import fs from "node:fs";
 import os from "node:os";
@@ -139,6 +140,7 @@ export async function applyCompletedSession(cs: SessionLike): Promise<string> {
   // The price is checked before tax (tax is Stripe's to add); inclusive pricing keeps the subtotal at the price.
   if ((cs.amount_subtotal ?? 0) < expected || cs.currency !== (row.currency ?? env.currency)) {
     await logEvent(row.requestId, "order:amount_mismatch", { orderId: row.id, subtotal: cs.amount_subtotal, expected, currency: cs.currency });
+    reportIssue("Paid amount does not match the order", { kind: "amount_mismatch", orderId: row.id, subtotal: cs.amount_subtotal, expected, currency: cs.currency });
     return "amount_mismatch";
   }
   const piId = typeof cs.payment_intent === "string" ? cs.payment_intent : (cs.payment_intent?.id ?? null);
@@ -165,6 +167,7 @@ export async function applySucceededIntent(pi: IntentLike): Promise<string> {
   const expected = row.amountCents ?? env.songPriceCents;
   if (pi.amount_received < expected || pi.currency !== (row.currency ?? env.currency)) {
     await logEvent(row.requestId, "order:amount_mismatch", { orderId: row.id, received: pi.amount_received, expected, currency: pi.currency });
+    reportIssue("Paid amount does not match the order", { kind: "amount_mismatch", orderId: row.id, received: pi.amount_received, expected, currency: pi.currency });
     return "amount_mismatch";
   }
   return markPaid(row, { paymentRef: pi.id, paymentIntentId: pi.id, amountCents: pi.amount_received, currency: pi.currency });
@@ -195,7 +198,10 @@ async function markPaid(row: Order, p: Payment): Promise<string> {
     .returning();
   if (!claimed.length) return "already_processed";
   await logEvent(row.requestId, newStatus === "paid" ? "order:paid" : "order:duplicate_payment", { orderId: row.id, paymentRef, amountCents, taxCents: p.taxCents ?? 0 });
-  if (newStatus !== "paid") return "duplicate_payment";
+  if (newStatus !== "paid") {
+    reportIssue("Second payment for an already-paid version: refund it", { kind: "duplicate_payment", orderId: row.id, otherOrderId: otherPaid?.id ?? null });
+    return "duplicate_payment";
+  }
   return fulfil(claimed[0]);
 }
 
@@ -275,7 +281,7 @@ export async function handleStripeWebhook(rawBody: string, headers: Headers): Pr
   } catch (e) {
     // Let Stripe retry: forget the receipt so the retry is processed.
     await db.delete(webhookReceipts).where(eq(webhookReceipts.id, `stripe:${event.id}`));
-    console.error("[stripe] webhook processing failed", e);
+    reportError(e, { where: "stripe_webhook", eventType: event.type, eventId: event.id });
     return { status: 500, result: "error" };
   }
 }
@@ -303,6 +309,7 @@ export async function fulfil(order: Order): Promise<string> {
     } catch (e) {
       await db.update(orders).set({ status: "paid_unfulfilled", error: `Audio unavailable: ${(e as Error).message}` }).where(eq(orders.id, order.id));
       await logEvent(order.requestId, "order:unfulfilled", { orderId: order.id, error: (e as Error).message });
+      reportIssue("Paid order could not be delivered", { kind: "paid_unfulfilled", orderId: order.id, requestId: order.requestId, error: (e as Error).message }, "fatal");
       return "paid_unfulfilled";
     }
   }

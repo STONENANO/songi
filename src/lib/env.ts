@@ -263,6 +263,39 @@ export const env = {
   get maxSongsPerDay(): number {
     return num(process.env.MAX_SONGS_PER_DAY, 40);
   },
+
+  /* ---------------- Abuse and spend control ---------------- */
+  /**
+   * Header that carries the visitor's IP, set by our host's proxy (never by the visitor).
+   * Railway's edge sets X-Real-IP, so that is the default on Railway. Elsewhere, empty:
+   * the last X-Forwarded-For entry is used.
+   */
+  get clientIpHeader(): string {
+    const v = process.env.CLIENT_IP_HEADER;
+    if (v !== undefined) return v.trim().toLowerCase();
+    return process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID ? "x-real-ip" : "";
+  },
+  /**
+   * Cloudflare Turnstile bot check on "Write the song". On only when both keys are set.
+   * The site key is public (shown in the page); the secret key verifies tokens server-side.
+   */
+  get turnstile() {
+    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+    const secretKey = process.env.TURNSTILE_SECRET_KEY ?? "";
+    return { siteKey, secretKey, enabled: !!siteKey && !!secretKey };
+  },
+  /** Lyric rewrites (regenerate or hand edit) one song may ask for, ever. Counted in the database. */
+  get maxLyricRewrites(): number {
+    return Math.max(0, num(process.env.MAX_LYRIC_REWRITES, 6));
+  },
+  /** Estimated Claude spend one song may reach before rewrites stop (first lyrics are never blocked). */
+  get maxLlmUsdPerSong(): number {
+    return num(process.env.MAX_LLM_USD_PER_SONG, 5);
+  },
+  /** Site-wide in-quiz follow-up questions per 24 hours; past it, the free rule-based version answers. */
+  get maxProbesPerDay(): number {
+    return num(process.env.MAX_PROBES_PER_DAY, 3000);
+  },
 };
 
 /**
@@ -287,6 +320,8 @@ export function productionConfigProblems(): string[] {
     // Without the webhook secret, refunds and late payment confirmations are never processed.
     if (missing.length) problems.push(`STRIPE_ENABLED is on but ${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} not set.`);
   }
+  // Half a Turnstile setup means no bot check at all: say so instead of running unprotected.
+  if (set("NEXT_PUBLIC_TURNSTILE_SITE_KEY") !== set("TURNSTILE_SECRET_KEY")) problems.push("Turnstile needs both NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY (or neither).");
   if (env.storageDriver === "s3") {
     const missing = ["S3_BUCKET", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"].filter((k) => !set(k));
     if (missing.length) problems.push(`STORAGE_DRIVER=s3 needs ${missing.join(", ")}.`);

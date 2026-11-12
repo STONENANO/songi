@@ -5,7 +5,9 @@ import { getDb, schema } from "@/lib/db";
 import { env } from "@/lib/env";
 import { GENRES } from "@/lib/songcraft";
 import { runBriefing } from "@/lib/pipeline/run";
-import { newProjectToken, projectCookie, rateLimit, clientIp } from "@/lib/session/project";
+import { newProjectToken, projectCookie } from "@/lib/session/project";
+import { rateLimit, clientIp } from "@/lib/http/rate-limit";
+import { verifyTurnstile } from "@/lib/http/turnstile";
 import { composeStory, StoryAnswerSchema } from "@/lib/onboarding/story";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
@@ -30,11 +32,14 @@ const Body = z.object({
   mood: z.string().trim().max(40).optional().default(""),
   customStyle: z.string().trim().max(300).optional().default(""),
   email: z.string().trim().email("Please enter a valid email.").optional().or(z.literal("")).default(""),
+  /** Cloudflare Turnstile token from the quiz (required when Turnstile is configured). */
+  turnstileToken: z.string().max(2048).optional(),
 });
 
 export async function POST(req: Request) {
   // Abuse control: song projects trigger paid generation later, so cap creation per IP.
-  if (!rateLimit(`create:${clientIp(req)}`, env.isProd ? 8 : 200, 60 * 60_000)) {
+  const ip = clientIp(req);
+  if (!(await rateLimit(`create:${ip}`, env.isProd ? 8 : 200, 60 * 60_000))) {
     return NextResponse.json({ error: "Too many songs started from this connection. Please try again later." }, { status: 429 });
   }
   const body = await readJson(req, BODY_LIMITS.create);
@@ -42,6 +47,9 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues.map((i) => i.message).join(" ") }, { status: 400 });
   const b = parsed.data;
+  // A person pressed the button: checked before anything that costs money (or counts toward the daily cap).
+  const human = await verifyTurnstile(b.turnstileToken, ip);
+  if (!human.ok) return NextResponse.json({ error: "We couldn't confirm you're not a robot. Please try again.", code: "turnstile" }, { status: 403 });
   const fromQuiz = b.answers.length > 0;
   const story = fromQuiz ? composeStory(b.answers, b.oneLine) : b.story;
   if (story.trim().length < 10) return NextResponse.json({ error: "Tell us a little more." }, { status: 400 });
@@ -72,7 +80,7 @@ export async function POST(req: Request) {
       accessTokenHash: hash,
       // The story quiz's extra answers (one line, feeling, leave-out, who it's from…) live here;
       // `autoRecord` makes the pipeline record as soon as verified lyrics exist.
-      quizSnapshot: { ...b, story, autoRecord: fromQuiz, quizVersion: fromQuiz ? "story-v1" : "classic", submittedAt: new Date().toISOString() },
+      quizSnapshot: { ...b, turnstileToken: undefined, story, autoRecord: fromQuiz, quizVersion: fromQuiz ? "story-v1" : "classic", submittedAt: new Date().toISOString() },
       // Experiment arm recorded with the project so results can be compared later.
       experiment: {
         writer: env.writerVersion,

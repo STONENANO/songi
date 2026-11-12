@@ -194,3 +194,12 @@ ALTER TABLE cost_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+
+-- Rate limits shared by every server instance; they survive restarts and deploys.
+-- Keys are SHA-256 hashes, so no IP address is stored.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key text PRIMARY KEY,
+  window_start timestamptz NOT NULL,
+  count integer NOT NULL
+);
+ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;

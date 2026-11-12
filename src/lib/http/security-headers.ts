@@ -10,7 +10,7 @@
  * address form. Browsers log any violation in the console without blocking it.
  * Once a live checkout shows no violations, move it to the enforced header.
  */
-type Options = { dev: boolean; waitVideoUrl?: string };
+type Options = { dev: boolean; waitVideoUrl?: string; sentryDsn?: string };
 
 function origin(url: string | undefined): string | null {
   if (!url) return null;
@@ -23,16 +23,19 @@ function origin(url: string | undefined): string | null {
 
 export function contentSecurityPolicy(o: Options): string {
   const video = origin(o.waitVideoUrl);
+  // Browser error reports go to the DSN's ingest host.
+  const sentry = origin(o.sentryDsn?.replace(/\/\/[^@/]*@/, "//"));
   return [
     "default-src 'self'",
     // Next.js inlines its bootstrap scripts; the dev server also needs eval for hot reload.
-    `script-src 'self' 'unsafe-inline'${o.dev ? " 'unsafe-eval'" : ""} https://js.stripe.com https://*.js.stripe.com https://maps.googleapis.com`,
+    `script-src 'self' 'unsafe-inline'${o.dev ? " 'unsafe-eval'" : ""} https://js.stripe.com https://*.js.stripe.com https://maps.googleapis.com https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://*.stripe.com",
     `media-src 'self' blob:${video ? ` ${video}` : ""}`,
-    `connect-src 'self' https://api.stripe.com https://*.stripe.com https://maps.googleapis.com${o.dev ? " ws: wss:" : ""}`,
-    "frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com",
+    `connect-src 'self' https://api.stripe.com https://*.stripe.com https://maps.googleapis.com${sentry ? ` ${sentry}` : ""}${o.dev ? " ws: wss:" : ""}`,
+    // Stripe's payment frames, and Cloudflare Turnstile's check on the quiz's last screen.
+    "frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",

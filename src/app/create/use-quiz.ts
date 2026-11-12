@@ -126,6 +126,9 @@ export function useQuiz() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cloudflare Turnstile: a fresh token for "Write the song"; bump the reset key after a refused submit.
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   // Restore an in-progress quiz after a refresh.
   useEffect(() => {
@@ -371,12 +374,15 @@ export function useQuiz() {
         email: s.email,
         phone: s.phone,
         giverName: s.giverName,
+        turnstileToken: turnstileToken || undefined,
       }),
     }).catch(() => null);
     const json = res ? await res.json().catch(() => ({})) : {};
     if (!res || !res.ok) {
       setError((json as { error?: string }).error ?? "Something went wrong. Please try again.");
       setBusy(false);
+      // The token was spent on this attempt (tokens are single-use): get a new one.
+      setTurnstileReset((n) => n + 1);
       return;
     }
     const id = (json as { id: string }).id;
@@ -391,7 +397,7 @@ export function useQuiz() {
       /* ignore */
     }
     router.push(`/r/${id}`);
-  }, [s, f, beats, answered.length, ingredients.length, strength, relationshipValue, occasionValue, router, boosterList, thin, stillThin]);
+  }, [s, f, beats, answered.length, ingredients.length, strength, relationshipValue, occasionValue, router, boosterList, thin, stillThin, turnstileToken]);
 
   return {
     s,
@@ -430,6 +436,10 @@ export function useQuiz() {
     submit,
     busy,
     error,
+    setError,
+    turnstileToken,
+    setTurnstileToken,
+    turnstileReset,
   };
 }
 

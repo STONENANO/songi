@@ -6,6 +6,11 @@ export async function startupChecks() {
   const problems = productionConfigProblems();
   if (problems.length) {
     console.error(`[config] Refusing to start: production settings are missing.\n- ${problems.join("\n- ")}`);
+    const Sentry = await import("@sentry/nextjs");
+    if (Sentry.isInitialized()) {
+      Sentry.captureMessage("Refusing to start: production settings are missing", { level: "fatal", extra: { problems } });
+      await Sentry.flush(3000);
+    }
     process.exit(1);
   }
   if (env.storageDriver !== "s3") return;
