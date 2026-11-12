@@ -126,7 +126,7 @@ test("every style prompt asks for a vocal-forward mix early, and keeps it even w
         const at = style.indexOf(VOCAL_FORWARD);
         assert.ok(at >= 0, `${g.key}/${a}/${gender}: ${style}`);
         assert.ok(at < 200, `${g.key}/${a}: vocal-forward should come early (at ${at})`);
-        assert.doesNotMatch(style, /stacked harmonies|wide arena mix|big live drums|hard-hitting drums|massive choir/, `${g.key}/${a}`);
+        assert.doesNotMatch(style, /stacked harmonies|wide arena mix|big live drums|hard-hitting drums|massive choir|deep bass|lush layered harmonies|backing vocal stacks|club-ready|synth leads|supersaw|full horn section|group backing vocals/, `${g.key}/${a}`);
         const tight = renderStyle(d, 320);
         assert.ok(tight.style.includes(VOCAL_FORWARD), `${g.key}/${a}: kept under a tight limit`);
         assert.ok(tight.style.length <= 320);
