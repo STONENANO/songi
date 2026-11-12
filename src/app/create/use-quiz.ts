@@ -6,8 +6,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, fill, inferRelationship, isGentleOccasion, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
+import { beatFor, formatFor, ingredientsFor, isAnswered, type TopicAnswer } from "@/lib/onboarding/story-formats";
 
-export type ThreadAnswer = { answer: string; followUp: string; followUpAnswer: string; probed: boolean };
+/** One line read back to the buyer before we write ("story beat"). */
+export type Beat = { key: string; topic: string; emoji: string; text: string; original: string; edited: boolean; gone: boolean };
+export const ANYTHING_ELSE = "anything_else";
 
 export type QuizState = {
   relationship: string;
@@ -21,9 +24,14 @@ export type QuizState = {
   /** Typed answer when "Something else" is picked. */
   occasionOther: string;
   threads: string[];
-  answers: Record<string, ThreadAnswer>;
-  ingredients: string[];
+  /** Answers per story topic: taps, blanks or free text (see story-formats.ts). */
+  topics: Record<string, TopicAnswer>;
   oneLine: string;
+  /** The open box: anything else they want in the song. */
+  anythingElse: string;
+  /** Read-back edits and removals, by beat key. */
+  beatEdits: Record<string, string>;
+  beatGone: string[];
   feeling: string;
   leaveOut: string;
   genreKey: string;
@@ -45,9 +53,11 @@ const EMPTY: QuizState = {
   occasion: "",
   occasionOther: "",
   threads: [],
-  answers: {},
-  ingredients: [],
+  topics: {},
   oneLine: "",
+  anythingElse: "",
+  beatEdits: {},
+  beatGone: [],
   feeling: "",
   leaveOut: "",
   genreKey: "",
@@ -63,18 +73,16 @@ export const MAX_THREADS = 3;
 export const MIN_THREADS = 1;
 /** Shown as the recommendation; one is allowed so nobody gets stuck. */
 export const RECOMMENDED_THREADS = 2;
-export const MAX_PROBES = 3;
-export const MIN_ANSWER_CHARS = 15;
-const STORAGE_KEY = "story-quiz-v2";
+const STORAGE_KEY = "story-quiz-v3";
 /** Genre tile for "describe it yourself"; recorded as pop plus the buyer's description. */
 export const CUSTOM_GENRE = "custom";
 
 export const CHAPTERS = ["Who it's for", "Their story", "The sound"] as const;
 
-export type StepId = string; // "who" | "occasion" | "threads" | `q:${thread}` | "one_line" | "feeling" | "sound" | "send"
+export type StepId = string; // "who" | "occasion" | "threads" | `q:${thread}` | "last_touches" | "readback" | "feeling" | "sound" | "send"
 
 function stepsFor(threads: string[]): StepId[] {
-  return ["who", "occasion", "threads", ...threads.map((t) => `q:${t}`), "one_line", "feeling", "sound", "send"];
+  return ["who", "occasion", "threads", ...threads.map((t) => `q:${t}`), "last_touches", "readback", "feeling", "sound", "send"];
 }
 
 function chapterOf(step: StepId): number {
@@ -163,7 +171,7 @@ export function useQuiz() {
   useEffect(() => {
     if (!loaded || lastTracked.current === step) return;
     lastTracked.current = step;
-    track("quiz:step_view", { step: step.startsWith("q:") ? "question" : step, thread: step.startsWith("q:") ? step.slice(2) : "", index });
+    track("quiz:step_view", { step: step.startsWith("q:") ? `question_${formatFor(step.slice(2)).kind}` : step, thread: step.startsWith("q:") ? step.slice(2) : "", index });
   }, [step, index, loaded]);
 
   const set = useCallback(<K extends keyof QuizState>(k: K, v: QuizState[K]) => setS((p) => ({ ...p, [k]: v })), []);
@@ -242,79 +250,74 @@ export function useQuiz() {
     });
   }, []);
 
-  const setAnswer = useCallback((thread: string, patch: Partial<ThreadAnswer>) => {
+  const setTopic = useCallback((thread: string, patch: Partial<TopicAnswer>) => {
     setS((p) => {
-      const prev = p.answers[thread] ?? { answer: "", followUp: "", followUpAnswer: "", probed: false };
-      return { ...p, answers: { ...p.answers, [thread]: { ...prev, ...patch } } };
+      const prev = p.topics[thread] ?? {};
+      // Changing an answer resets any read-back edit of it, so the buyer re-checks the new line.
+      const { [thread]: _drop, ...beatEdits } = p.beatEdits;
+      return { ...p, topics: { ...p.topics, [thread]: { ...prev, ...patch } }, beatEdits, beatGone: p.beatGone.filter((k) => k !== thread) };
     });
   }, []);
 
-  const addIngredients = useCallback((items: string[]) => {
-    setS((p) => {
-      const seen = new Set(p.ingredients.map((i) => i.toLowerCase()));
-      const add = items.map((i) => i.trim()).filter((i) => i && !seen.has(i.toLowerCase()));
-      return add.length ? { ...p, ingredients: [...p.ingredients, ...add].slice(-12) } : p;
-    });
-  }, []);
+  const answered = s.threads.filter((t) => isAnswered(formatFor(t), s.topics[t]));
 
-  const answered = s.threads.filter((t) => (s.answers[t]?.answer ?? "").trim().length >= MIN_ANSWER_CHARS);
-  const probesUsed = Object.values(s.answers).filter((a) => a.followUp).length;
+  /** The story read back to the buyer: one line per answered topic, plus the open box. */
+  const beats: Beat[] = useMemo(() => {
+    const list: Beat[] = [];
+    for (const key of s.threads) {
+      const t = threadByKey(key);
+      const fmt = formatFor(key);
+      const a = s.topics[key];
+      if (!t || !isAnswered(fmt, a)) continue;
+      const original = beatFor(fmt, fill(t.label, name, pronoun), a!, name, pronoun);
+      const edit = s.beatEdits[key];
+      list.push({ key, topic: fill(t.label, name, pronoun), emoji: t.emoji, text: edit ?? original, original, edited: edit !== undefined, gone: s.beatGone.includes(key) });
+    }
+    if (s.anythingElse.trim()) {
+      const edit = s.beatEdits[ANYTHING_ELSE];
+      list.push({ key: ANYTHING_ELSE, topic: "Anything else", emoji: "📝", text: edit ?? s.anythingElse.trim(), original: s.anythingElse.trim(), edited: edit !== undefined, gone: s.beatGone.includes(ANYTHING_ELSE) });
+    }
+    return list;
+  }, [s.threads, s.topics, s.beatEdits, s.beatGone, s.anythingElse, name, pronoun]);
+
+  const editBeat = useCallback((key: string, text: string) => setS((p) => ({ ...p, beatEdits: { ...p.beatEdits, [key]: text } })), []);
+  const toggleBeat = useCallback(
+    (key: string) => setS((p) => ({ ...p, beatGone: p.beatGone.includes(key) ? p.beatGone.filter((k) => k !== key) : [...p.beatGone, key] })),
+    [],
+  );
+
+  /** Chips for the ingredients tray, from everything answered so far. */
+  const ingredients = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const key of s.threads)
+      for (const i of ingredientsFor(formatFor(key), s.topics[key], name, pronoun)) {
+        if (!seen.has(i.toLowerCase())) {
+          seen.add(i.toLowerCase());
+          out.push(i);
+        }
+      }
+    return out.slice(-12);
+  }, [s.threads, s.topics, name, pronoun]);
+
   /** 0..5: how much real material we have. Drives the strength meter. */
   const strength = Math.min(
     5,
-    answered.length + Math.floor(s.ingredients.length / 3) + (s.oneLine.trim().length > 10 ? 1 : 0) + (Object.values(s.answers).some((a) => a.followUpAnswer.trim()) ? 1 : 0),
-  );
-
-  /** Ask for a dig-deeper follow-up. Resolves to null on timeout or error; the quiz never waits long. */
-  const probe = useCallback(
-    async (thread: string, question: string, answer: string, isFollowUp: boolean, timeoutMs: number) => {
-      const t = threadByKey(thread);
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-      try {
-        const res = await fetch("/api/probe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: ctrl.signal,
-          body: JSON.stringify({
-            recipientName: s.recipientName,
-            relationship: relationshipValue,
-            pronoun,
-            question,
-            answer,
-            isFollowUp,
-            fallbackDig: t ? f(t.dig) : "",
-          }),
-        });
-        if (!res.ok) return null;
-        return (await res.json()) as { reaction: string; followUp: string; ingredients: string[] };
-      } catch {
-        return null;
-      } finally {
-        clearTimeout(timer);
-      }
-    },
-    [s.recipientName, relationshipValue, pronoun, f],
+    answered.length + Math.floor(ingredients.length / 3) + (s.oneLine.trim().length > 10 ? 1 : 0) + (s.anythingElse.trim().length > 20 ? 1 : 0),
   );
 
   const submit = useCallback(async () => {
     setBusy(true);
     setError(null);
     const feeling = FEELINGS.find((x) => x.value === s.feeling);
-    const answers = s.threads
-      .map((key) => {
-        const t = threadByKey(key);
-        const a = s.answers[key];
-        if (!t || !a?.answer.trim()) return null;
-        return {
-          thread: key,
-          question: f(t.question),
-          answer: a.answer,
-          followUp: a.followUp,
-          followUpAnswer: a.followUpAnswer,
-        };
-      })
-      .filter((x): x is NonNullable<typeof x> => !!x);
+    // The songwriter gets exactly the lines the buyer confirmed, in their words.
+    const answers = beats
+      .filter((b) => !b.gone && b.text.trim())
+      .map((b) => ({
+        thread: b.key,
+        question: b.key === ANYTHING_ELSE ? "Anything else to put in the song" : f(threadByKey(b.key)?.question ?? b.topic),
+        answer: b.text.trim(),
+      }));
     const res = await fetch("/api/requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -343,14 +346,18 @@ export function useQuiz() {
       return;
     }
     const id = (json as { id: string }).id;
-    track("quiz:submitted", { threads: s.threads.length, answered: answered.length, ingredients: s.ingredients.length, strength }, id);
+    track(
+      "quiz:submitted",
+      { threads: s.threads.length, answered: answered.length, ingredients: ingredients.length, strength, beatsEdited: beats.filter((b) => b.edited).length, beatsLeftOut: beats.filter((b) => b.gone).length, openBox: !!s.anythingElse.trim() },
+      id,
+    );
     try {
       sessionStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
     }
     router.push(`/r/${id}`);
-  }, [s, f, answered.length, strength, router]);
+  }, [s, f, beats, answered.length, ingredients.length, strength, relationshipValue, occasionValue, router]);
 
   return {
     s,
@@ -366,10 +373,11 @@ export function useQuiz() {
     goTo,
     editFromRecap,
     toggleThread,
-    setAnswer,
-    addIngredients,
-    probe,
-    probesUsed,
+    setTopic,
+    beats,
+    editBeat,
+    toggleBeat,
+    ingredients,
     answered,
     strength,
     rel,

@@ -301,7 +301,8 @@ export function fill(template: string, name: string, pronoun: Pronoun): string {
   if (pronoun === "they") {
     out = out
       .replace(/\b([Tt]hey) is\b/g, "$1 are")
-      .replace(/\b([Tt]hey) (always |never )?(says|calls|tells|looks|hums|makes|does|sees)\b/g, (_m, t, adv = "", v: string) => `${t} ${adv}${v.replace(/s$/, "").replace(/doe$/, "do")}`);
+      .replace(/\b([Tt]hey)'s\b/g, "$1're")
+      .replace(/\b([Tt]hey) (always |never )?(says|calls|tells|looks|hums|makes|does|sees|snorts|burns|sits)\b/g, (_m, t, adv = "", v: string) => `${t} ${adv}${v.replace(/s$/, "").replace(/doe$/, "do")}`);
   }
   return out;
 }

@@ -5,8 +5,9 @@ import { useQuiz, type Quiz } from "./use-quiz";
 import {
   FeelingScreen,
   OccasionScreen,
-  OneLineScreen,
-  QuestionScreen,
+  LastTouchesScreen,
+  ReadBackScreen,
+  TopicScreen,
   SendScreen,
   SoundScreen,
   ThreadsScreen,
@@ -33,7 +34,7 @@ function Step({ q, genres }: { q: Quiz; genres: Genre[] }) {
 
 function render(q: Quiz, genres: Genre[]): ScreenParts {
   const step = q.step;
-  if (step.startsWith("q:")) return QuestionScreen(q, step.slice(2));
+  if (step.startsWith("q:")) return TopicScreen(q, step.slice(2));
   switch (step) {
     case "who":
       return WhoScreen(q);
@@ -41,8 +42,10 @@ function render(q: Quiz, genres: Genre[]): ScreenParts {
       return OccasionScreen(q);
     case "threads":
       return ThreadsScreen(q);
-    case "one_line":
-      return OneLineScreen(q);
+    case "last_touches":
+      return LastTouchesScreen(q);
+    case "readback":
+      return ReadBackScreen(q);
     case "feeling":
       return FeelingScreen(q);
     case "sound":

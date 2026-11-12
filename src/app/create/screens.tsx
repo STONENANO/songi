@@ -14,6 +14,7 @@ import {
   Picked,
   Quote,
   Recap,
+  revealAboveBar,
   DetailToLyric,
   ErrorText,
   Field,
@@ -29,7 +30,8 @@ import {
   TrustRow,
 } from "@/components/ui";
 import { DETAIL_EXAMPLES, FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, TRUST, feelingsFor, threadByKey, threadsFor } from "@/lib/onboarding/content";
-import { CUSTOM_GENRE, MAX_PROBES, MAX_THREADS, MIN_ANSWER_CHARS, MIN_THREADS, RECOMMENDED_THREADS, track, type Quiz } from "./use-quiz";
+import { CUSTOM_GENRE, MAX_THREADS, MIN_THREADS, RECOMMENDED_THREADS, track, type Quiz } from "./use-quiz";
+import { OTHER_ANSWER, formatFor, isAnswered, type BlanksFormat, type TapFormat } from "@/lib/onboarding/story-formats";
 
 export type Genre = { key: string; label: string; tagline: string };
 
@@ -206,147 +208,218 @@ export function ThreadsScreen(q: Quiz): ScreenParts {
   };
 }
 
-type Phase = "write" | "thinking" | "followup" | "reacted";
+/* ---------------------- One screen per story topic ---------------------- */
 
-/** One story question, with the dig-deeper follow-up. */
-export function QuestionScreen(q: Quiz, thread: string): ScreenParts {
-  const t = threadByKey(thread)!;
-  const a = q.s.answers[thread] ?? { answer: "", followUp: "", followUpAnswer: "", probed: false };
-  // Coming back to an answered question: show its follow-up again rather than re-asking.
-  const [phase, setPhase] = useState<Phase>(a.followUp ? "followup" : "write");
-  const [reaction, setReaction] = useState("");
-  const question = q.f(t.question);
-  const pos = q.s.threads.indexOf(thread);
-  const others = q.s.threads.filter((x) => x !== thread);
-  const canSkip = others.some((x) => (q.s.answers[x]?.answer ?? "").trim().length >= MIN_ANSWER_CHARS) || pos < q.s.threads.length - 1;
-
-  const insertStarter = (starter: string) => {
-    const text = q.f(starter).replace(/…$/, " ");
-    const cur = phase === "followup" ? a.followUpAnswer : a.answer;
-    const next = cur.trim() ? `${cur.trim()} ${text}` : text;
-    q.setAnswer(thread, phase === "followup" ? { followUpAnswer: next } : { answer: next });
-  };
-
-  const submitAnswer = async () => {
-    if (a.probed || q.probesUsed >= MAX_PROBES) {
-      // Still collect ingredients, but don't wait for them.
-      void q.probe(thread, question, a.answer, true, 2500).then((r) => r && q.addIngredients(r.ingredients));
-      q.next();
-      return;
-    }
-    setPhase("thinking");
-    const r = await q.probe(thread, question, a.answer, false, 3500);
-    q.setAnswer(thread, { probed: true });
-    if (r) q.addIngredients(r.ingredients);
-    const followUp = r ? r.followUp : a.answer.trim().length < 60 ? q.f(t.dig) : "";
-    setReaction(r?.reaction ?? "");
-    if (followUp) {
-      q.setAnswer(thread, { followUp, probed: true });
-      track("quiz:followup_shown", { thread });
-      setPhase("followup");
-    } else {
-      setPhase("reacted");
-      setTimeout(q.next, r?.reaction ? 1300 : 0);
-    }
-  };
-
-  const submitFollowUp = () => {
-    track("quiz:followup_answered", { thread });
-    void q.probe(thread, a.followUp, a.followUpAnswer, true, 2500).then((r) => r && q.addIngredients(r.ingredients));
-    q.next();
-  };
-
-  const skip = () => {
-    track(phase === "followup" ? "quiz:followup_skipped" : "quiz:question_skipped", { thread });
-    q.next();
-  };
-
-  const body = (
-    <>
-      <IngredientsTray items={q.s.ingredients} strength={q.strength} />
-      <ScreenTitle
-        eyebrow={`${t.emoji} ${q.f(t.label)} · ${pos + 1} of ${q.s.threads.length}`}
-        title={question}
-        subtitle={q.f(t.hint)}
-      />
-      {phase === "write" ? (
-        <TextArea
-          value={a.answer}
-          onChange={(e) => q.setAnswer(thread, { answer: e.target.value, probed: false, followUp: "", followUpAnswer: "" })}
-          placeholder={q.f(t.starters[0])}
-          maxLength={2000}
-          autoFocus
-          aria-label={question}
-        />
-      ) : (
-        // Shrunk once sent, so the follow-up and its answer box stay above the fold.
-        <Quote>{a.answer}</Quote>
-      )}
-      {phase === "write" && (
-        <div className="ui-stack ui-mt">
-          <Chips>
-            {t.starters.map((st) => (
-              <Chip key={st} ghost onClick={() => insertStarter(st)}>
-                {q.f(st)}
-              </Chip>
-            ))}
-          </Chips>
-          <Tip>{KEYBOARD_TIP}</Tip>
-        </div>
-      )}
-      {phase === "thinking" && <Bubble typing />}
-      {phase === "reacted" && reaction && <Bubble>{reaction}</Bubble>}
-      {phase === "followup" && (
-        <>
-          <Bubble>
-            {reaction && <p style={{ marginBottom: 6 }}>{reaction}</p>}
-            <b>{a.followUp}</b>
-          </Bubble>
-          <TextArea
-            value={a.followUpAnswer}
-            onChange={(e) => q.setAnswer(thread, { followUpAnswer: e.target.value })}
-            placeholder="Even one sentence helps."
-            maxLength={2000}
-            autoFocus
-            style={{ minHeight: 100 }}
-            aria-label={a.followUp}
-          />
-        </>
-      )}
-    </>
-  );
-
-  const footer =
-    phase === "followup" ? (
-      <>
-        <Button block disabled={a.followUpAnswer.trim().length < 3} onClick={submitFollowUp}>
-          Add to the song
-        </Button>
-        <Button variant="text" onClick={skip}>Skip this one</Button>
-      </>
-    ) : (
-      <>
-        <Button block disabled={phase !== "write" || a.answer.trim().length < MIN_ANSWER_CHARS} onClick={submitAnswer}>
-          {phase === "thinking" ? "Reading…" : "Continue"}
-        </Button>
-        {phase === "write" && canSkip && <Button variant="text" onClick={skip}>Skip this question</Button>}
-      </>
-    );
-
-  return { body, footer };
+/** Picks the topic's format: tap answers, a fill-in story card, or a free text box. */
+export function TopicScreen(q: Quiz, thread: string): ScreenParts {
+  const fmt = formatFor(thread);
+  if (fmt.kind === "tap") return TapTopic(q, thread, fmt);
+  if (fmt.kind === "blanks") return BlanksTopic(q, thread, fmt);
+  return OpenTopic(q, thread, fmt);
 }
 
-export function OneLineScreen(q: Quiz): ScreenParts {
+function topicHead(q: Quiz, thread: string) {
+  const t = threadByKey(thread)!;
+  const pos = q.s.threads.indexOf(thread);
+  return { t, pos, eyebrow: `${t.emoji} ${q.f(t.label)} · ${pos + 1} of ${q.s.threads.length}` };
+}
+
+/** Skipping is allowed unless it would leave the story completely empty. */
+function canSkipTopic(q: Quiz, thread: string) {
+  const pos = q.s.threads.indexOf(thread);
+  return q.answered.some((x) => x !== thread) || pos < q.s.threads.length - 1;
+}
+
+function skipTopic(q: Quiz, thread: string) {
+  track("quiz:question_skipped", { thread });
+  q.next();
+}
+
+/** Tap first, type second: answer tiles, a narrowing chip row, one optional detail. */
+function TapTopic(q: Quiz, thread: string, fmt: TapFormat): ScreenParts {
+  const { t, eyebrow } = topicHead(q, thread);
+  const a = q.s.topics[thread] ?? {};
+  const isOther = a.choice === OTHER_ANSWER;
+  const follow = a.choice && !isOther ? (fmt.follow?.[a.choice] ?? fmt.follow?.["*"] ?? []) : [];
+  const picked = fmt.answers.find((x) => x.label === a.choice);
+  const ok = isAnswered(fmt, a);
   return {
     body: (
       <>
-        <IngredientsTray items={q.s.ingredients} strength={q.strength} />
-        <ScreenTitle
-          eyebrow="The heart of the song"
-          title={`If this song could say one thing to ${q.name} that's hard to say out loud, what would it be?`}
-          subtitle="We'll build the chorus around it."
-        />
-        <TextArea value={q.s.oneLine} onChange={(e) => q.set("oneLine", e.target.value)} placeholder={q.f("I don't say it enough, but…")} maxLength={300} style={{ minHeight: 110 }} autoFocus />
+        <IngredientsTray items={q.ingredients} strength={q.strength} />
+        <ScreenTitle eyebrow={eyebrow} title={q.f(t.question)} subtitle={a.choice ? undefined : "Tap one. You can add a detail after."} />
+        {a.choice ? (
+          <Picked emoji={picked?.emoji} label={q.f(a.choice)} onChange={() => q.setTopic(thread, { choice: "", follow: "", other: "", detail: "" })} />
+        ) : (
+          <Tiles>
+            {fmt.answers.map((x) => (
+              <Tile key={x.label} emoji={x.emoji} label={q.f(x.label)} onClick={() => q.setTopic(thread, { choice: x.label, follow: "" })} />
+            ))}
+          </Tiles>
+        )}
+        {isOther && (
+          <div className="ui-mt">
+            <Field label="Tell us in a few words">
+              <TextInput autoFocus value={a.other ?? ""} onChange={(e) => q.setTopic(thread, { other: e.target.value })} placeholder="Type your answer" maxLength={80} />
+            </Field>
+          </div>
+        )}
+        {follow.length > 0 && (
+          <div className="ui-mt ui-stack">
+            <span className="ui-field__label">{q.f(fmt.followLabel ?? "")}</span>
+            <Chips>
+              {follow.map((o) => (
+                <Chip key={o} selected={a.follow === o} onClick={() => q.setTopic(thread, { follow: a.follow === o ? "" : o })}>
+                  {q.f(o)}
+                </Chip>
+              ))}
+            </Chips>
+          </div>
+        )}
+        {a.choice && (
+          <div className="ui-mt">
+            <Field label={<>Add one detail <span className="ui-note">(optional)</span></>} hint="💡 Tap the 🎤 on your keyboard to just say it.">
+              <TextInput value={a.detail ?? ""} onChange={(e) => q.setTopic(thread, { detail: e.target.value })} placeholder={q.f(fmt.detail)} maxLength={160} />
+            </Field>
+          </div>
+        )}
+      </>
+    ),
+    footer: (
+      <>
+        <Button block disabled={!ok} onClick={q.next}>
+          Continue
+        </Button>
+        {!a.choice && canSkipTopic(q, thread) ? (
+          <Button variant="text" onClick={() => skipTopic(q, thread)}>Skip this question</Button>
+        ) : (
+          <p className="ui-footer__note">{!a.choice ? "One tap is enough to continue" : (a.detail ?? "").trim() ? "That detail makes it yours ✓" : "One detail makes the song more personal"}</p>
+        )}
+      </>
+    ),
+  };
+}
+
+/** Fill in the blanks: a story card with glowing gaps; suggestions dock above the button. */
+function BlanksTopic(q: Quiz, thread: string, fmt: BlanksFormat): ScreenParts {
+  const { t, eyebrow } = topicHead(q, thread);
+  const vals = q.s.topics[thread]?.blanks ?? fmt.blanks.map(() => "");
+  const firstEmpty = vals.findIndex((v) => !v.trim());
+  const [active, setActive] = useState<number | null>(firstEmpty === -1 ? null : firstEmpty);
+  const [typed, setTyped] = useState("");
+  const filled = vals.filter((v) => v.trim()).length;
+  const madlibRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Keep the blank being filled visible above the docked suggestions.
+    const el = madlibRef.current?.querySelector(".ui-blank--active");
+    if (el) setTimeout(() => revealAboveBar(el), 60);
+  }, [active]);
+
+  const setVal = (i: number, v: string) => {
+    const next = [...vals];
+    next[i] = v;
+    q.setTopic(thread, { blanks: next });
+    const after = next.findIndex((x, j) => !x.trim() && j !== i);
+    setActive(after === -1 ? null : after);
+    setTyped("");
+    track("quiz:blank_filled", { thread, blank: i });
+  };
+  const spec = active !== null ? fmt.blanks[active] : null;
+
+  return {
+    body: (
+      <>
+        <ScreenTitle eyebrow={eyebrow} title={q.f(t.question)} subtitle="Tap a blank to fill it in. Pick a suggestion or type your own." />
+        <div className="ui-meter ui-mb">
+          <div className="ui-meter__track">
+            <div className="ui-meter__fill" style={{ width: `${(filled / vals.length) * 100}%` }} />
+          </div>
+          <span>
+            {filled}/{vals.length}
+          </span>
+        </div>
+        <div className="ui-madlib" ref={madlibRef}>
+          {fmt.sentences.map((sentence, si) => (
+            <span key={si}>
+              {sentence.map((part, pi) =>
+                typeof part === "number" ? (
+                  <button
+                    key={pi}
+                    type="button"
+                    className={["ui-blank", vals[part].trim() && "ui-blank--filled", active === part && "ui-blank--active"].filter(Boolean).join(" ")}
+                    onClick={() => {
+                      setActive(part);
+                      setTyped(fmt.blanks[part].sugg.includes(vals[part]) ? "" : vals[part]);
+                    }}
+                    aria-label={q.f(fmt.blanks[part].label)}
+                  >
+                    {vals[part].trim() || "______"}
+                  </button>
+                ) : (
+                  <span key={pi}>{q.f(part)}</span>
+                ),
+              )}{" "}
+            </span>
+          ))}
+        </div>
+        {filled === vals.length && <p className="ui-win ui-mt">✓ Beautiful. That&apos;s going in {q.name}&apos;s song.</p>}
+      </>
+    ),
+    footer: (
+      <>
+        {spec && active !== null && (
+          <div className="ui-dock">
+            <div className="ui-dock__head">
+              <span>{q.f(spec.label)}</span>
+              <Button variant="text" onClick={() => setActive(fmt.blanks.findIndex((_, j) => j > active && !vals[j].trim()) === -1 ? null : fmt.blanks.findIndex((_, j) => j > active && !vals[j].trim()))}>
+                Skip blank
+              </Button>
+            </div>
+            <Chips>
+              {spec.sugg.map((sg) => (
+                <Chip key={sg} selected={vals[active] === q.f(sg)} onClick={() => setVal(active, q.f(sg))}>
+                  {q.f(sg)}
+                </Chip>
+              ))}
+            </Chips>
+            <div className="ui-dock__row">
+              <TextInput
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && typed.trim() && setVal(active, typed.trim())}
+                placeholder="Or type your own…"
+                maxLength={80}
+                enterKeyHint="done"
+              />
+              <Button disabled={!typed.trim()} onClick={() => setVal(active, typed.trim())}>
+                Fill
+              </Button>
+            </div>
+          </div>
+        )}
+        <Button block disabled={filled === 0} onClick={q.next}>
+          Continue
+        </Button>
+        {filled === 0 && canSkipTopic(q, thread) ? (
+          <Button variant="text" onClick={() => skipTopic(q, thread)}>Skip this card</Button>
+        ) : (
+          <p className="ui-footer__note">{filled === 0 ? "Fill any blank to continue" : filled < vals.length ? `${vals.length - filled} left, or keep going` : "Card complete ✓"}</p>
+        )}
+      </>
+    ),
+  };
+}
+
+/** Free text, for "Something else". */
+function OpenTopic(q: Quiz, thread: string, fmt: { placeholder: string }): ScreenParts {
+  const { t, eyebrow } = topicHead(q, thread);
+  const a = q.s.topics[thread] ?? {};
+  return {
+    body: (
+      <>
+        <IngredientsTray items={q.ingredients} strength={q.strength} />
+        <ScreenTitle eyebrow={eyebrow} title={q.f(t.question)} subtitle={q.f(t.hint)} />
+        <TextArea value={a.text ?? ""} onChange={(e) => q.setTopic(thread, { text: e.target.value })} placeholder={q.f(fmt.placeholder)} maxLength={1500} autoFocus aria-label={q.f(t.question)} />
         <div className="ui-mt">
           <Tip>{KEYBOARD_TIP}</Tip>
         </div>
@@ -354,10 +427,99 @@ export function OneLineScreen(q: Quiz): ScreenParts {
     ),
     footer: (
       <>
-        <Button block disabled={q.s.oneLine.trim().length < 5} onClick={q.next}>
+        <Button block disabled={!isAnswered(formatFor(thread), a)} onClick={q.next}>
           Continue
         </Button>
-        <Button variant="text" onClick={q.next}>You write it for me</Button>
+        {canSkipTopic(q, thread) && <Button variant="text" onClick={() => skipTopic(q, thread)}>Skip this question</Button>}
+      </>
+    ),
+  };
+}
+
+/** The open box: the one thing to say, and anything else they want in the song. Both optional. */
+export function LastTouchesScreen(q: Quiz): ScreenParts {
+  const empty = !q.s.oneLine.trim() && !q.s.anythingElse.trim();
+  return {
+    body: (
+      <>
+        <ScreenTitle eyebrow="Last touches · optional" title={`Anything else for ${q.name}'s song?`} subtitle="Know exactly what you want to say? Put it here. Not sure? Just continue." />
+        <Field label={`The one thing you want the song to tell ${q.name}`} hint="We'll build the chorus around it.">
+          <TextArea value={q.s.oneLine} onChange={(e) => q.set("oneLine", e.target.value)} placeholder={q.f("I don't say it enough, but…")} maxLength={300} style={{ minHeight: 76 }} />
+        </Field>
+        <Field label="Anything else" hint="Memories, names, words to use, even lines you've written yourself.">
+          <TextArea value={q.s.anythingElse} onChange={(e) => q.set("anythingElse", e.target.value)} placeholder="Write as much or as little as you like…" maxLength={1500} style={{ minHeight: 110 }} />
+        </Field>
+        <Tip>{KEYBOARD_TIP}</Tip>
+      </>
+    ),
+    footer: (
+      <Button block onClick={q.next}>
+        {empty ? "Skip for now" : "Continue"}
+      </Button>
+    ),
+  };
+}
+
+/** Read back and confirm: every line we'll write from, in their words. All kept by default. */
+export function ReadBackScreen(q: Quiz): ScreenParts {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const kept = q.beats.filter((b) => !b.gone).length;
+  const hasStory = kept > 0 || q.s.oneLine.trim().length >= 10;
+  return {
+    body: (
+      <>
+        <ScreenTitle eyebrow="Before we write" title={`Here's what we heard about ${q.name}`} subtitle="Every line goes into the song. Fix anything that's off." />
+        {q.beats.length === 0 ? (
+          <Card tone="muted">
+            <Note>You skipped the story questions. Go back and tap an answer or two, or add something in “Anything else”.</Note>
+          </Card>
+        ) : (
+          <div className="ui-beats">
+            {q.beats.map((b) => (
+              <div key={b.key} className={`ui-beat ${b.gone ? "ui-beat--gone" : ""}`}>
+                {editing === b.key ? (
+                  <TextArea value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus style={{ minHeight: 90, fontFamily: "var(--font-display)" }} aria-label={`Edit: ${b.topic}`} />
+                ) : (
+                  <p className="ui-beat__text">{b.text}</p>
+                )}
+                <span className="ui-beat__src">
+                  {b.emoji} {b.topic}
+                  {b.edited ? " · edited by you" : ""}
+                </span>
+                <div className="ui-beat__actions">
+                  {editing === b.key ? (
+                    <>
+                      <Chip selected onClick={() => { q.editBeat(b.key, draft.trim() || b.original); setEditing(null); track("quiz:beat_edited", { beat: b.key }); }}>
+                        Save
+                      </Chip>
+                      <Chip onClick={() => setEditing(null)}>Cancel</Chip>
+                    </>
+                  ) : (
+                    <>
+                      <Chip onClick={() => { setEditing(b.key); setDraft(b.text); }}>✏️ Fix</Chip>
+                      <Chip onClick={() => { q.toggleBeat(b.key); track("quiz:beat_toggled", { beat: b.key, gone: !b.gone }); }}>{b.gone ? "↩ Put back" : "✕ Leave out"}</Chip>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {q.s.oneLine.trim() && (
+          <Card tone="muted">
+            <span className="ui-beat__src">💛 The heart of the song</span>
+            <p className="ui-beat__text">{q.s.oneLine.trim()}</p>
+          </Card>
+        )}
+      </>
+    ),
+    footer: (
+      <>
+        <Button block disabled={!hasStory || editing !== null} onClick={q.next}>
+          Yes, that&apos;s our story
+        </Button>
+        <p className="ui-footer__note">{hasStory ? `${kept} line${kept === 1 ? "" : "s"} going into ${q.name}'s song` : "Add at least one detail to continue"}</p>
       </>
     ),
   };
@@ -367,7 +529,7 @@ export function FeelingScreen(q: Quiz): ScreenParts {
   const feelings = feelingsFor(q.group, q.gentle);
   const [showLeaveOut, setShowLeaveOut] = useState(!!q.s.leaveOut);
   const label = q.strength >= 4 ? "Strong story" : q.strength >= 2 ? "Good story" : "A good start";
-  const details = q.s.ingredients.length + (q.s.oneLine.trim() ? 1 : 0);
+  const details = q.ingredients.length + (q.s.oneLine.trim() ? 1 : 0);
   return {
     body: (
       <>
@@ -471,7 +633,7 @@ export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
   const feeling = FEELINGS.find((x) => x.value === q.s.feeling);
   const sound = q.s.genreKey === CUSTOM_GENRE ? q.s.customStyle.trim() : (genres.find((g) => g.key === q.s.genreKey)?.label ?? "");
   const voice = q.s.vocalGender === "f" ? "female voice" : q.s.vocalGender === "m" ? "male voice" : "any voice";
-  const details = q.s.ingredients.length + (q.s.oneLine.trim() ? 1 : 0);
+  const details = q.ingredients.length + (q.s.oneLine.trim() ? 1 : 0);
   return {
     body: (
       <>

@@ -22,8 +22,19 @@ export function Screen(props: {
   /** Changing this replays the enter animation (use the step id). */
   animKey?: string | number;
 }) {
+  // The floating bar can grow (docked suggestions); pad the page by its real height so nothing hides behind it.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    const foot = root?.querySelector<HTMLElement>(".ui-footer");
+    const body = root?.querySelector<HTMLElement>(".ui-screen__body");
+    if (!foot || !body || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => body.style.setProperty("padding-bottom", `${foot.offsetHeight + 24}px`));
+    ro.observe(foot);
+    return () => ro.disconnect();
+  }, [props.footer]);
   return (
-    <div className="ui-screen">
+    <div className="ui-screen" ref={rootRef}>
       <header className="ui-screen__header">
         <div className="ui-screen__bar">
           {props.onBack ? (
@@ -329,6 +340,18 @@ export function Picked({ emoji, label, sub, onChange }: { emoji?: string; label:
       <span className="ui-picked__change">Change</span>
     </button>
   );
+}
+
+/**
+ * Scroll so `el` sits above the floating bar (the bar covers the bottom of the screen).
+ * Use when focus moves to something that may be behind it.
+ */
+export function revealAboveBar(el: Element | null) {
+  if (!el || typeof window === "undefined") return;
+  const bar = document.querySelector(".ui-footer")?.getBoundingClientRect().top ?? window.innerHeight;
+  const r = el.getBoundingClientRect();
+  if (r.bottom > bar - 12) window.scrollBy({ top: r.bottom - bar + 24, behavior: "smooth" });
+  else if (r.top < 70) window.scrollBy({ top: r.top - 90, behavior: "smooth" });
 }
 
 /** A previous answer shown small, so the next question stays above the fold. */
