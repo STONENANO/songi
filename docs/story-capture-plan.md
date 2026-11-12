@@ -1,5 +1,7 @@
 # Story capture plan
 
+> Status: built. Decisions since this was written: no named producer persona (speaks as "we" until there is a brand), no voice button (a tip suggests the keyboard's microphone instead), and the thread picker stays.
+
 Goal: get a better story out of the buyer than ForeverSongs does, in about the same time (2 to 3 minutes), and sell the song while we collect it.
 
 ForeverSongs collects three "1 to 2 sentence" text boxes (a 30-character minimum on one of them). In a real test run that produced about 200 characters: "Loving, caring, supports the family", "We met in high school in math class", "Happy birthday baby". We beat that by asking better questions, not more of them.

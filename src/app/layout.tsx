@@ -1,17 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import "./theme.css";
 import "./globals.css";
+import "../components/ui/ui.css";
+import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "Custom Song Studio",
-  description: "Turn a few memories into a personalised song.",
+  title: `${BRAND.name}: a song written from your story`,
+  description: "Tell us about someone you love. We'll write and sing a song about them.",
 };
+
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <div className="wrap">{children}</div>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

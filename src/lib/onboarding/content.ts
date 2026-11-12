@@ -97,7 +97,7 @@ const T: Record<string, Thread> = {
   },
   sayings: {
     key: "sayings",
-    label: "What {they} always say",
+    label: "{Their} favourite sayings",
     emoji: "💬",
     question: "What does {name} always say?",
     hint: "A catchphrase, a nickname, a bit of advice. Their exact words sing best.",
@@ -142,7 +142,7 @@ const T: Record<string, Thread> = {
   },
   gives: {
     key: "gives",
-    label: "What {they} do for everyone",
+    label: "How {they} looks after everyone",
     emoji: "🤲",
     question: "What does {name} do for everyone that nobody thanks {them} for?",
     hint: "The quiet things. The rides, the meals, the calls.",
@@ -276,3 +276,16 @@ export function fill(template: string, name: string, pronoun: Pronoun): string {
   }
   return out;
 }
+
+/** The chapter-card example: one small detail and the lyric it could become. Illustrative, per relationship group. */
+export const DETAIL_EXAMPLES: Record<Group, { from: string; to: string }> = {
+  partner: { from: "She steals my hoodies", to: "You wear my hoodie like it was always yours" },
+  parent: { from: "Mom made pancakes every Sunday", to: "Sunday smelled like syrup, and you were always there" },
+  grandparent: { from: "Grandpa taught me to fish at the lake", to: "Down by the water, you taught me how to wait" },
+  child: { from: "She sings into her hairbrush every morning", to: "Hairbrush microphone, the whole world is your stage" },
+  sibling: { from: "We shared a bunk bed and talked all night", to: "Top bunk whispers till the morning came" },
+  friend: { from: "We've done karaoke every Friday since college", to: "Every Friday night, same song, same mic, same us" },
+  other: { from: "He always shows up with coffee", to: "Two cups of coffee and you never ask why" },
+};
+
+export const TRUST = ["About 2 minutes", "Free preview", "No card needed"];
