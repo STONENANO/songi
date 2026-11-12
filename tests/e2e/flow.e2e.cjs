@@ -121,13 +121,12 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   await page.waitForSelector("text=It's yours.", { timeout: 30000 });
   assert.ok(await page.isVisible('a[aria-label="Download MP3"]'), "download in the top corner");
   assert.ok((await page.locator("button.pl-line").count()) > 4, "timed lyric lines");
-  // The cover is our own saved copy, served from the song's permanent link.
-  const coverSrc = await page.getAttribute(".pl-cover img", "src");
-  assert.match(coverSrc || "", /^\/api\/cover\//, "cover saved to our storage");
-  const coverRes = await page.request.get(`${BASE}${coverSrc}`);
-  assert.equal(coverRes.status(), 200);
-  assert.match(coverRes.headers()["content-type"], /^image\//);
-  assert.match(await page.getAttribute('meta[property="og:image"]', "content"), /\/api\/cover\//, "link preview uses the cover");
+  // Lines fade with distance from the focused line.
+  const op = await page.locator("button.pl-line").evaluateAll((els) => els.slice(0, 4).map((e) => Number(getComputedStyle(e).opacity)));
+  assert.ok(op[0] > op[1] && op[1] > op[2] && op[2] > op[3], `lines fade with distance: ${op}`);
+  // No cover art: the lyrics are the picture, and no image is offered for link previews.
+  assert.equal(await page.locator(".pl-cover, .pl img").count(), 0, "no cover art");
+  assert.equal(await page.locator('meta[property="og:image"]').count(), 0);
   await shot("e2e-3b-player");
   // Play: the lyric highlight follows the song.
   await page.click('button[aria-label="Play"]');
