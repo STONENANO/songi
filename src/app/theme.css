@@ -2,75 +2,97 @@
  * THEME. Every visual decision lives here as a design token.
  * To re-skin the product, change these values (and the files in /public/brand).
  * Components only ever reference var(--…) tokens; no colours or fonts are hard-coded elsewhere.
+ *
+ * Cryworthy · "Happy Tears" on notebook paper: a lined page, ink-black buttons, one vivid
+ * iris blue for everything that matters, and a blue tear-wash over every line that came
+ * from the buyer's story. A clay teardrop mascot and 3D desk objects carry the personality.
  */
 :root {
   color-scheme: light;
 
   /* Colour */
-  --color-bg: #fbf7f2;
+  --color-bg: #f9fafb; /* notebook paper, cool white */
   --color-surface: #ffffff;
-  --color-surface-muted: #f4ede4;
-  --color-border: #e8ddd0;
-  --color-border-strong: #d6c6b4;
-  --color-text: #2a211b;
-  --color-text-muted: #74665a;
-  --color-text-faint: #a39484;
+  --color-surface-muted: #ebf5ff; /* sky wash */
+  --color-border: #dfe6ee;
+  --color-border-strong: #b9c4d2;
+  --color-text: #0a0d12; /* ink */
+  --color-text-muted: #535862;
+  --color-text-faint: #93979f;
 
-  --color-primary: #b4442e;
-  --color-primary-hover: #9c3925;
+  --color-primary: #181d27; /* ink-black buttons */
+  --color-primary-hover: #2a3140;
   --color-primary-ink: #ffffff;
-  --color-primary-soft: #f8e4dd;
+  --color-primary-soft: #ebf5ff; /* selected things: a sky wash */
 
-  --color-highlight: #fcefc4; /* lines built from the buyer's story */
-  --color-highlight-ink: #6b4e00;
+  --color-accent: #0069e0; /* iris blue: the one vivid colour. Notes, links, ticks, selection */
+  --color-accent-bright: #479dff;
+  --gradient-accent: linear-gradient(180deg, #479dff 11%, #0069e0 78%);
+  --color-accent-soft: #e0efff;
+
+  --color-highlight: #b8dbff; /* the tear-wash: lines built from the buyer's story */
+  --color-highlight-ink: #0a0d12;
   --color-success: #2f7d55;
   --color-success-soft: #e3f3ea;
-  --color-danger: #b42318;
-  --color-warning-soft: #fff4d6;
+  --color-danger: #c0392b;
+  --color-warning-soft: #fff2be;
 
-  --color-glass: rgba(251, 247, 242, 0.72); /* floating button bar: see-through page background */
-  --color-glass-border: rgba(42, 33, 27, 0.08);
+  /* The notebook page */
+  --paper-rule: #e3ecf6; /* ruled lines */
+  --paper-rule-gap: 32px;
+  --paper-margin: #8fc2ff; /* the margin line, in blue */
+  --kraft: #c8a274;
+  --shadow-lift: 0 14px 20px 4px rgba(4, 69, 144, 0.08);
+
+  --color-glass: rgba(249, 250, 251, 0.78); /* floating button bar: see-through page background */
+  --color-glass-border: rgba(10, 13, 18, 0.08);
   --glass-blur: 14px;
 
-  --color-dark-surface: #231b16; /* studio card, footer bars */
-  --color-dark-ink: #f8f1e9;
+  --color-dark-surface: #0b1a33; /* studio card: midnight blue */
+  --color-dark-ink: #ffffff;
 
-  /* Song page (the music player buyers keep and share) */
-  --player-bg: #1c1512;
-  --player-bg-glow: #7a2e1f; /* colour that fades down from the top */
-  --player-ink: #fbf3ea;
-  --player-ink-muted: rgba(251, 243, 234, 0.62);
-  --player-track: rgba(251, 243, 234, 0.22);
-  --player-accent: #fbf3ea; /* play button and progress */
-  --player-accent-ink: #1c1512;
-  --player-lyric-size: 26px;
-  --player-story-mark: rgba(251, 243, 234, 0.3); /* underline on lines built from the buyer's story */
+  /* Song page (the music player buyers keep and share): the same paper, ink and highlighter */
+  --player-bg: #f9fafb;
+  --player-bg-glow: #d6ebff; /* colour that fades down from the top */
+  --player-ink: #0a0d12;
+  --player-ink-muted: rgba(10, 13, 18, 0.55);
+  --player-track: rgba(0, 105, 224, 0.15);
+  --player-accent: #181d27; /* play button and progress */
+  --player-accent-ink: #ffffff;
+  --player-lyric-size: 27px;
+  --player-story-mark: #0069e0; /* pen underline on lines built from the buyer's story */
+  --player-active-mark: #b8dbff; /* tear-wash on the line being sung */
 
   /* Type */
-  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
-  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-lyrics: var(--font-display);
+  --font-display: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-lyrics: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-hand: "Kalam", "Segoe Print", "Bradley Hand", cursive; /* margin notes, written in pen */
   --text-xs: 12px;
   --text-sm: 14px;
   --text-md: 16px;
   --text-lg: 18px;
   --text-xl: 22px;
-  --text-2xl: 28px;
-  --text-3xl: 34px;
+  --text-2xl: 30px;
+  --text-3xl: 40px;
+  --text-hero: clamp(48px, 9vw, 104px);
   --weight-regular: 400;
   --weight-medium: 500;
-  --weight-bold: 650;
-  --leading-tight: 1.15;
+  --weight-bold: 600;
+  --leading-tight: 1.08;
   --leading-body: 1.5;
+  --tracking-display: -0.025em;
+  --tracking-body: -0.01em;
 
   /* Shape and depth */
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-sm: 6px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
   --radius-pill: 999px;
-  --shadow-sm: 0 1px 2px rgba(42, 33, 27, 0.06);
-  --shadow-md: 0 6px 24px rgba(42, 33, 27, 0.08);
-  --shadow-focus: 0 0 0 3px rgba(180, 68, 46, 0.25);
+  --shadow-sm: 0 1px 2px rgba(10, 13, 18, 0.06);
+  --shadow-md: 0 10px 24px -6px rgba(10, 13, 18, 0.14);
+  --shadow-btn: 0 1px 2px rgba(10, 13, 18, 0.8), 0 0 0 1px #0a0d12;
+  --shadow-focus: 0 0 0 3px rgba(0, 105, 224, 0.3);
 
   /* Space and layout */
   --space-1: 4px;
@@ -81,10 +103,12 @@
   --space-6: 32px;
   --space-7: 48px;
   --content-width: 560px;
+  --page-width: 1120px;
   --tap-min: 48px;
 
   /* Motion */
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 150ms;
-  --duration-base: 250ms;
+  --duration-base: 300ms;
+  --duration-mark: 900ms; /* the tear-wash stroke */
 }

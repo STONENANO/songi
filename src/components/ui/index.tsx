@@ -183,7 +183,7 @@ export function Note({ children }: { children: ReactNode }) {
 export function Tip({ children }: { children: ReactNode }) {
   return (
     <p className="ui-tip">
-      <span aria-hidden>💡</span>
+      <span aria-hidden>✎</span>
       <span>{children}</span>
     </p>
   );
@@ -530,6 +530,10 @@ export function StudioCard({ messages, sub }: { messages: string[]; sub?: string
   }, [messages.length]);
   return (
     <div className="ui-studio">
+      <span className="ui-studio__rec" aria-hidden>REC</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="ui-studio__tape" src="/brand/mascot/headphones.webp" alt="" aria-hidden />
+      <span className="ui-studio__tears" aria-hidden><i /><i /><i /><i /></span>
       <div className="ui-studio__eq" aria-hidden>
         {Array.from({ length: 9 }, (_, k) => (
           <span key={k} style={{ animationDelay: `${(k % 5) * 0.13}s` }} />

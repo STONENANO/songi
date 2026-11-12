@@ -215,11 +215,11 @@ function LyricStage({ lines, active, timed, compact, onSeek }: { lines: Line[]; 
           const style = { opacity: strength(i) };
           return timed && l.start !== null ? (
             <button key={i} type="button" ref={(el) => void (lineEls.current[i] = el)} className={cls} style={style} onClick={() => onSeek(l.start!)}>
-              {l.text}
+              <span>{l.text}</span>
             </button>
           ) : (
             <p key={i} ref={(el) => void (lineEls.current[i] = el)} className={cls} style={style}>
-              {l.text}
+              <span>{l.text}</span>
             </p>
           );
         })}
