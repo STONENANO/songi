@@ -1,7 +1,10 @@
 /**
- * Home page. A notebook spread: the pitch on the left of the margin line, the objects
- * from a gift drawer floating around it. Everything links into the quiz at /create.
- * Styles: ./home.css (theme tokens only). Art: /public/brand/objects.
+ * Home page. A notebook spread: the pitch in the middle, objects from a gift drawer
+ * floating around it. Everything links into the quiz at /create.
+ * Styles: ./home.css (theme tokens only). Art: /public/brand.
+ *
+ * ALL marketing copy lives in COPY below, as placeholders. Fill it in there; the layout
+ * reads nothing else. Interface labels (nav, buttons) are in COPY too.
  */
 import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
@@ -10,19 +13,56 @@ import "./home.css";
 
 export const dynamic = "force-dynamic"; // the price comes from server env
 
-const STEPS = [
-  { img: "marker", title: "Tell us about them", body: "A short quiz, one question at a time. Pick the stories worth singing: how you met, the inside joke, the hard year you got through." },
-  { img: "cassette", title: "We write it and record it", body: "Your details become lyrics, and every line is checked against what you told us. Then we record two or three versions in the style you picked." },
-  { img: "tissues", title: "Press play. Pass the tissues.", body: "Hear the previews free. Keep the one that gets you, change any line you like, and send them a song that's only about them." },
-];
-
-const FAQ = [
-  { q: "How long does it take?", a: "The quiz takes about two minutes. The lyrics are ready in a minute or two, and the recordings a few minutes after that. You can leave the page and come back." },
-  { q: "Do I pay before I hear it?", a: "No. You hear the previews first, for free, and only pay for the version you want to keep." },
-  { q: "What if a line isn't right?", a: "Change it. Edit any line and we'll check it and record the song again with your wording." },
-  { q: "Who sings it?", a: "The music and vocals are made with AI, from lyrics written for this one song. Nothing is a template with a name dropped in." },
-  { q: "What do I get?", a: "The full song as an MP3, plus a page of its own where it plays with the lyrics following along. Share the link or download the file." },
-];
+const COPY = {
+  nav: { how: "How it works", faq: "Questions", cta: "Make a song" },
+  cta: "Call to action",
+  hero: {
+    note: "Eyebrow note",
+    /** The headline in three parts: the middle part gets the blue "crying" treatment. */
+    titleStart: "Headline",
+    titleAccent: "placeholder",
+    titleEnd: "here.",
+    sub: "Subheadline placeholder. One or two sentences that explain the product.",
+    aside: "← short note",
+  },
+  facts: ["Proof point one", "Proof point two", "Proof point three", "Proof point four"],
+  how: {
+    note: "section note",
+    title: "Section headline placeholder",
+    steps: [
+      { img: "marker", title: "Step one title", body: "Step one description placeholder. A sentence or two." },
+      { img: "cassette", title: "Step two title", body: "Step two description placeholder. A sentence or two." },
+      { img: "tissues", title: "Step three title", body: "Step three description placeholder. A sentence or two." },
+    ],
+  },
+  words: {
+    note: "section note",
+    title: "Section headline placeholder",
+    body: "Body copy placeholder. Two or three sentences that explain this section.",
+    from: "“Example detail from a customer's story.”",
+    becomes: "↓ becomes",
+    lyricLine: "Example lyric line one,",
+    lyricHighlight: "example lyric line two",
+    caption: "example lyric",
+  },
+  price: {
+    note: "section note",
+    sub: "Price subline placeholder.",
+    checks: ["Included item one", "Included item two", "Included item three", "Included item four"],
+  },
+  faq: {
+    note: "section note",
+    title: "FAQ headline placeholder",
+    items: [
+      { q: "Question one?", a: "Answer placeholder." },
+      { q: "Question two?", a: "Answer placeholder." },
+      { q: "Question three?", a: "Answer placeholder." },
+      { q: "Question four?", a: "Answer placeholder." },
+    ],
+  },
+  final: { title: "Closing headline placeholder", sub: "Closing subline placeholder." },
+  footer: "Footer line placeholder.",
+};
 
 export default function Home() {
   const price = env.freeDownloads ? "Free while testing" : env.priceLabel;
@@ -33,10 +73,10 @@ export default function Home() {
           {BRAND.name}
         </a>
         <div className="home-nav__links">
-          <a href="#how">How it works</a>
-          <a href="#faq">Questions</a>
+          <a href="#how">{COPY.nav.how}</a>
+          <a href="#faq">{COPY.nav.faq}</a>
           <a className="home-btn home-btn--sm" href="/create">
-            Make a song
+            {COPY.nav.cta}
           </a>
         </div>
       </nav>
@@ -49,35 +89,34 @@ export default function Home() {
           <i />
           <i />
         </div>
-        <p className="home-note home-hero__note">a song, written from your story</p>
+        <p className="home-note home-hero__note">{COPY.hero.note}</p>
         <h1 className="home-hero__title">
-          Songs worth <span className="home-cry">crying</span> over.
+          {COPY.hero.titleStart} <span className="home-cry">{COPY.hero.titleAccent}</span> {COPY.hero.titleEnd}
         </h1>
-        <p className="home-hero__sub">Tell us about someone you love. We write the lyrics from your story, record the song, and you hear it before you pay.</p>
+        <p className="home-hero__sub">{COPY.hero.sub}</p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="home-mascot" src="/brand/mascot/hero.webp" alt="" />
         <div className="home-hero__cta">
           <a className="home-btn" href="/create">
-            Start their song
+            {COPY.cta}
           </a>
-          <span className="home-note home-hero__aside">← free preview, no card</span>
+          <span className="home-note home-hero__aside">{COPY.hero.aside}</span>
         </div>
       </header>
 
-      <ul className="home-facts" aria-label="What you get">
-        <li>Every line checked against your story</li>
-        <li>Two or three versions to choose from</li>
-        <li>Change any line, free</li>
-        <li>An MP3 that's yours to keep</li>
+      <ul className="home-facts">
+        {COPY.facts.map((f) => (
+          <li key={f}>{f}</li>
+        ))}
       </ul>
 
       <section className="home-section" id="how" aria-labelledby="how-title">
-        <p className="home-note">how it works</p>
+        <p className="home-note">{COPY.how.note}</p>
         <h2 className="home-h2" id="how-title">
-          Three steps from a memory to a song.
+          {COPY.how.title}
         </h2>
         <ol className="home-steps">
-          {STEPS.map((s, i) => (
+          {COPY.how.steps.map((s, i) => (
             <li key={s.title} className="home-step">
               <span className="home-step__n" aria-hidden>
                 {i + 1}.
@@ -93,56 +132,55 @@ export default function Home() {
 
       <section className="home-section home-words" aria-labelledby="words-title">
         <div className="home-words__copy">
-          <p className="home-note">your words, in the song</p>
+          <p className="home-note">{COPY.words.note}</p>
           <h2 className="home-h2" id="words-title">
-            The details only you know end up in the chorus.
+            {COPY.words.title}
           </h2>
-          <p className="home-p">We ask for small, specific things: a habit, a place, a thing they always say. Those are the lines that land. On your song page, every line that came from your story is highlighted, so you can see exactly where it went.</p>
+          <p className="home-p">{COPY.words.body}</p>
         </div>
         <figure className="home-words__card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="home-words__photo" src="/brand/objects/polaroid.webp" alt="" loading="lazy" />
-          <p className="home-words__from">“He drives us to the coast every August and pretends he isn't crying when the sun goes down.”</p>
+          <p className="home-words__from">{COPY.words.from}</p>
           <p className="home-words__arrow" aria-hidden>
-            ↓ becomes
+            {COPY.words.becomes}
           </p>
           <p className="home-words__to">
-            Every August, salt on the windshield,
+            {COPY.words.lyricLine}
             <br />
-            <span className="home-mark home-mark--scroll">you blame the sunset for your eyes</span>
+            <span className="home-mark">{COPY.words.lyricHighlight}</span>
           </p>
-          <figcaption className="home-note home-words__cap">example lyric</figcaption>
+          <figcaption className="home-note home-words__cap">{COPY.words.caption}</figcaption>
         </figure>
       </section>
 
       <section className="home-section home-price" aria-labelledby="price-title">
         <div className="home-price__card">
           <div>
-            <p className="home-note">one song, one person</p>
+            <p className="home-note">{COPY.price.note}</p>
             <h2 className="home-h2" id="price-title">
               {price}
             </h2>
-            <p className="home-p">Paid once, after you've heard it.</p>
+            <p className="home-p">{COPY.price.sub}</p>
           </div>
           <ul className="home-checks">
-            <li>An original song, written for them</li>
-            <li>Two or three versions to pick from</li>
-            <li>Edit any line and we re-record</li>
-            <li>MP3 download and a song page to share</li>
+            {COPY.price.checks.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
           </ul>
           <a className="home-btn" href="/create">
-            Start their song
+            {COPY.cta}
           </a>
         </div>
       </section>
 
       <section className="home-section" id="faq" aria-labelledby="faq-title">
-        <p className="home-note">questions</p>
+        <p className="home-note">{COPY.faq.note}</p>
         <h2 className="home-h2" id="faq-title">
-          Before you start
+          {COPY.faq.title}
         </h2>
         <div className="home-faq">
-          {FAQ.map((f) => (
+          {COPY.faq.items.map((f) => (
             <details key={f.q} className="home-faq__item">
               <summary>{f.q}</summary>
               <div className="home-faq__a">
@@ -161,17 +199,17 @@ export default function Home() {
           <img className="home-final__mascot" src="/brand/mascot/headphones.webp" alt="" loading="lazy" />
         </div>
         <h2 className="home-h2" id="final-title">
-          Have tissues ready.
+          {COPY.final.title}
         </h2>
-        <p className="home-p">Two minutes of questions. A song they'll keep.</p>
+        <p className="home-p">{COPY.final.sub}</p>
         <a className="home-btn" href="/create">
-          Start their song
+          {COPY.cta}
         </a>
       </section>
 
       <footer className="home-foot">
         <span className="home-brand">{BRAND.name}</span>
-        <span>Songs written from your story.</span>
+        <span>{COPY.footer}</span>
       </footer>
     </div>
   );

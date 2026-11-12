@@ -5,8 +5,8 @@ import "../components/ui/ui.css";
 import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: `${BRAND.name}: songs worth crying over`,
-  description: "Tell us about someone you love. We'll write and sing a song about them, from your story.",
+  title: BRAND.name,
+  description: "Description placeholder.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#faf8f2" };
