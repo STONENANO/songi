@@ -28,6 +28,10 @@
   --color-danger: #b42318;
   --color-warning-soft: #fff4d6;
 
+  --color-glass: rgba(251, 247, 242, 0.72); /* floating button bar: see-through page background */
+  --color-glass-border: rgba(42, 33, 27, 0.08);
+  --glass-blur: 14px;
+
   --color-dark-surface: #231b16; /* studio card, footer bars */
   --color-dark-ink: #f8f1e9;
 

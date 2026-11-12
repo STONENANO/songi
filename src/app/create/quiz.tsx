@@ -48,7 +48,7 @@ function render(q: Quiz, genres: Genre[]): ScreenParts {
     case "sound":
       return SoundScreen(q, genres);
     case "send":
-      return SendScreen(q);
+      return SendScreen(q, genres);
     default:
       return WhoScreen(q);
   }

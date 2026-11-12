@@ -10,6 +10,8 @@ import {
   Card,
   Chip,
   Chips,
+  Collapse,
+  Recap,
   DetailToLyric,
   ErrorText,
   Field,
@@ -24,8 +26,8 @@ import {
   Tip,
   TrustRow,
 } from "@/components/ui";
-import { DETAIL_EXAMPLES, OCCASIONS, OTHER, RELATIONSHIPS, TRUST, feelingsFor, threadByKey, threadsFor } from "@/lib/onboarding/content";
-import { CUSTOM_GENRE, MAX_PROBES, MAX_THREADS, MIN_ANSWER_CHARS, MIN_THREADS, track, type Quiz } from "./use-quiz";
+import { DETAIL_EXAMPLES, FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, TRUST, feelingsFor, threadByKey, threadsFor } from "@/lib/onboarding/content";
+import { CUSTOM_GENRE, MAX_PROBES, MAX_THREADS, MIN_ANSWER_CHARS, MIN_THREADS, RECOMMENDED_THREADS, track, type Quiz } from "./use-quiz";
 
 export type Genre = { key: string; label: string; tagline: string };
 
@@ -108,12 +110,13 @@ export function WhoScreen(q: Quiz): ScreenParts {
         )}
       </>
     ),
-    footer: picked ? (
-      <Button block disabled={!name || !otherOk} onClick={q.next}>
-        Continue
-      </Button>
-    ) : (
-      <TrustRow items={TRUST} />
+    footer: (
+      <>
+        <Button block disabled={!picked || !name || !otherOk} onClick={q.next}>
+          Continue
+        </Button>
+        <TrustRow items={TRUST} />
+      </>
     ),
   };
 }
@@ -143,12 +146,10 @@ export function OccasionScreen(q: Quiz): ScreenParts {
         )}
       </>
     ),
-    footer: q.isOtherOcc ? (
-      <Button block disabled={!otherOk} onClick={q.next}>
+    footer: (
+      <Button block disabled={!q.s.occasion || !otherOk} onClick={q.next}>
         Continue
       </Button>
-    ) : (
-      <TrustRow items={TRUST} />
     ),
   };
 }
@@ -163,10 +164,13 @@ export function ThreadsScreen(q: Quiz): ScreenParts {
   return {
     body: (
       <>
-        <ScreenTitle eyebrow="Chapter 2 of 3" title={`What should ${q.name}'s song be about?`} subtitle={`Pick ${MIN_THREADS} or ${MAX_THREADS}. We'll ask one quick question about each. Small, specific moments make the best songs.`} />
-        <Card tone="muted">
-          <DetailToLyric from={ex.from} to={ex.to} />
-        </Card>
+        <ScreenTitle eyebrow="Chapter 2 of 3" title={`What should ${q.name}'s song be about?`} subtitle={`Pick up to ${MAX_THREADS}. We recommend ${RECOMMENDED_THREADS}: we'll ask one quick question about each.`} />
+        {/* The example plays once, then folds away so the topics move up. Skipped when coming back. */}
+        <Collapse ms={2800} closed={n > 0}>
+          <Card tone="muted">
+            <DetailToLyric animate from={ex.from} to={ex.to} />
+          </Card>
+        </Collapse>
         <Tiles>
           {options.map((t) => {
             const on = q.s.threads.includes(t.key);
@@ -178,9 +182,15 @@ export function ThreadsScreen(q: Quiz): ScreenParts {
     footer: (
       <>
         <Button block disabled={n < MIN_THREADS} onClick={q.next}>
-          {n < MIN_THREADS ? `Pick ${MIN_THREADS - n} more` : "Continue"}
+          {n === 0 ? "Pick a topic" : "Continue"}
         </Button>
-        <p className="ui-footer__note">{n}/{MAX_THREADS} picked · plain sentences are perfect, and you can skip anything</p>
+        <p className="ui-footer__note">
+          {n === 0
+            ? "Plain sentences are perfect, and you can skip anything."
+            : n < RECOMMENDED_THREADS
+              ? `Tip: add one more for a richer song (${n}/${MAX_THREADS})`
+              : `${n}/${MAX_THREADS} picked · great choice`}
+        </p>
       </>
     ),
   };
@@ -423,28 +433,47 @@ export function SoundScreen(q: Quiz, genres: Genre[]): ScreenParts {
   };
 }
 
-export function SendScreen(q: Quiz): ScreenParts {
+/** Pre-checkout: a recap of the song they've built, then where to send it. */
+export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
   const [showPhone, setShowPhone] = useState(!!q.s.phone);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q.s.email.trim());
-  const emailRef = useRef<HTMLInputElement>(null);
-  useEffect(() => emailRef.current?.focus(), []);
+  const who = q.isOtherRel ? q.s.relationshipOther.trim() : (q.rel?.label ?? "");
+  const occasion = q.isOtherOcc ? q.s.occasionOther.trim() : (q.occasion?.label ?? "");
+  const topics = q.s.threads.map((t) => threadByKey(t)).filter(Boolean).map((t) => q.f(t!.label));
+  const feeling = FEELINGS.find((x) => x.value === q.s.feeling);
+  const sound = q.s.genreKey === CUSTOM_GENRE ? q.s.customStyle.trim() : (genres.find((g) => g.key === q.s.genreKey)?.label ?? "");
+  const voice = q.s.vocalGender === "f" ? "female voice" : q.s.vocalGender === "m" ? "male voice" : "any voice";
+  const details = q.s.ingredients.length + (q.s.oneLine.trim() ? 1 : 0);
   return {
     body: (
       <>
-        <ScreenTitle title={`Where should we send ${q.name}'s song?`} subtitle="Your free preview plays on the next screen. We'll also email you the link so you never lose it." />
-        <Field label="Your email">
-          <TextInput ref={emailRef} type="email" inputMode="email" autoComplete="email" value={q.s.email} onChange={(e) => q.set("email", e.target.value)} placeholder="you@example.com" />
-        </Field>
-        <Field label="Who's the song from? (optional)" hint={`So the song can say it's from you.`}>
-          <TextInput value={q.s.giverName} onChange={(e) => q.set("giverName", e.target.value)} placeholder="Your first name" autoComplete="given-name" maxLength={60} />
-        </Field>
-        {showPhone ? (
-          <Field label="Mobile number (optional)" hint="We'll text you when it's ready.">
-            <TextInput type="tel" inputMode="tel" autoComplete="tel" value={q.s.phone} onChange={(e) => q.set("phone", e.target.value)} placeholder="(555) 123-4567" maxLength={30} />
+        <ScreenTitle eyebrow="Almost there" title={`${q.name}'s song is ready to write`} subtitle="Here's what we'll write from. Your free preview plays on the next screen." />
+        <Card>
+          <Recap
+            rows={[
+              { label: "For", value: <><b>{q.name}</b>{who ? `, your ${who.toLowerCase()}` : ""}</>, onEdit: () => q.editFromRecap("who") },
+              { label: "Occasion", value: occasion, onEdit: () => q.editFromRecap("occasion") },
+              { label: "About", value: topics.join(" · ") + (details ? ` (${details} details)` : ""), onEdit: () => q.goTo("threads") },
+              ...(feeling ? [{ label: "Feeling", value: `${feeling.emoji} ${feeling.label}`, onEdit: () => q.editFromRecap("feeling") }] : []),
+              { label: "Sound", value: `${sound}, ${voice}`, onEdit: () => q.editFromRecap("sound") },
+            ]}
+          />
+        </Card>
+        <Card title="Where should we send it?">
+          <Field label="Your email" hint="We'll email you the link so you never lose it.">
+            <TextInput type="email" inputMode="email" autoComplete="email" value={q.s.email} onChange={(e) => q.set("email", e.target.value)} placeholder="you@example.com" />
           </Field>
-        ) : (
-          <Button variant="text" onClick={() => setShowPhone(true)}>Text it to me too</Button>
-        )}
+          <Field label="Who's it from? (optional)">
+            <TextInput value={q.s.giverName} onChange={(e) => q.set("giverName", e.target.value)} placeholder="Your first name" autoComplete="given-name" maxLength={60} />
+          </Field>
+          {showPhone ? (
+            <Field label="Mobile number (optional)" hint="We'll text you when it's ready.">
+              <TextInput type="tel" inputMode="tel" autoComplete="tel" value={q.s.phone} onChange={(e) => q.set("phone", e.target.value)} placeholder="(555) 123-4567" maxLength={30} />
+            </Field>
+          ) : (
+            <Button variant="text" onClick={() => setShowPhone(true)}>Text it to me too</Button>
+          )}
+        </Card>
         {q.error && <ErrorText>{q.error}</ErrorText>}
       </>
     ),
@@ -453,7 +482,7 @@ export function SendScreen(q: Quiz): ScreenParts {
         <Button block disabled={!emailOk || q.busy} onClick={q.submit}>
           {q.busy ? "Starting…" : `Write ${q.name}'s song`}
         </Button>
-        <TrustRow items={["Free preview", "No card needed"]} />
+        <TrustRow items={["Free preview", "No card needed", "Change any line later"]} />
       </>
     ),
   };

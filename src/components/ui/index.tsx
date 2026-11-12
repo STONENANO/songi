@@ -260,9 +260,9 @@ export function IngredientsTray({ items, strength, label = "Song ingredients" }:
   );
 }
 
-export function DetailToLyric({ from, to }: { from: string; to: string }) {
+export function DetailToLyric({ from, to, animate }: { from: string; to: string; animate?: boolean }) {
   return (
-    <div className="ui-example">
+    <div className={cx("ui-example", animate && "ui-example--animate")}>
       <span className="ui-example__from">“{from}”</span>
       <span className="ui-example__arrow">↓ becomes</span>
       <span className="ui-example__to">♪ {to}</span>
@@ -295,6 +295,43 @@ export function ProgressBar({ value, label }: { value: number; label?: ReactNode
       <div className="ui-progress__track">
         <div className="ui-progress__fill" style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+/** Shows its content, then folds away after `ms` (or straight away when `closed`). */
+export function Collapse({ ms, closed, children }: { ms?: number; closed?: boolean; children: ReactNode }) {
+  const [shut, setShut] = useState(!!closed);
+  useEffect(() => {
+    if (closed || !ms) return;
+    const t = setTimeout(() => setShut(true), ms);
+    return () => clearTimeout(t);
+  }, [ms, closed]);
+  return (
+    <div className={cx("ui-collapse", (shut || closed) && "ui-collapse--closed")} aria-hidden={shut || closed}>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+export type RecapRow = { label: string; value: ReactNode; onEdit?: () => void };
+/** A short summary of what the buyer chose, each line editable. */
+export function Recap({ rows }: { rows: RecapRow[] }) {
+  return (
+    <div className="ui-recap">
+      {rows.map((r) => (
+        <div key={r.label} className="ui-recap__row">
+          <span className="ui-recap__label">{r.label}</span>
+          <span className="ui-recap__value">{r.value}</span>
+          {r.onEdit ? (
+            <button type="button" className="ui-recap__edit" onClick={r.onEdit}>
+              Edit
+            </button>
+          ) : (
+            <span />
+          )}
+        </div>
+      ))}
     </div>
   );
 }

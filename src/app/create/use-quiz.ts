@@ -60,7 +60,9 @@ const EMPTY: QuizState = {
 };
 
 export const MAX_THREADS = 3;
-export const MIN_THREADS = 2;
+export const MIN_THREADS = 1;
+/** Shown as the recommendation; one is allowed so nobody gets stuck. */
+export const RECOMMENDED_THREADS = 2;
 export const MAX_PROBES = 3;
 export const MIN_ANSWER_CHARS = 15;
 const STORAGE_KEY = "story-quiz-v2";
@@ -170,10 +172,25 @@ export function useQuiz() {
     setS((p) => ({ ...p, stepId: id }));
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }, []);
+  /** Set when the buyer taps "Edit" on the recap: Continue goes straight back there. */
+  const returnTo = useRef<StepId | null>(null);
   const next = useCallback(() => {
+    if (returnTo.current) {
+      const r = returnTo.current;
+      returnTo.current = null;
+      return goTo(r);
+    }
     const n = steps[index + 1];
     if (n) goTo(n);
   }, [steps, index, goTo]);
+  /** Jump to a step to change one answer, then come back to the recap. */
+  const editFromRecap = useCallback(
+    (id: StepId) => {
+      returnTo.current = s.stepId;
+      goTo(id);
+    },
+    [s.stepId, goTo],
+  );
   const back = useCallback(() => {
     const p = steps[index - 1];
     if (p) goTo(p);
@@ -347,6 +364,7 @@ export function useQuiz() {
     next,
     back: index > 0 ? back : undefined,
     goTo,
+    editFromRecap,
     toggleThread,
     setAnswer,
     addIngredients,
