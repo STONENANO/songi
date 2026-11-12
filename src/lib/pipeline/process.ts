@@ -18,6 +18,7 @@ import { choosePreviewStart } from "../audio/preview";
 import { evaluateVersion } from "../audio/quality";
 import { technicalQa } from "../audio/qa";
 import { getStorage } from "../storage";
+import { saveCover } from "../media/cover";
 import { logEvent } from "./common";
 
 const { songVersions, costLedger } = schema;
@@ -98,6 +99,7 @@ export async function processTrack(opts: { request: SongRequest; generation: Gen
     await storage.putFile(`${base}/full.mp3`, full, "audio/mpeg");
     await storage.putFile(`${base}/preview.mp3`, preview, "audio/mpeg");
 
+    const coverKey = await saveCover(track.image_url, base, tmp);
     const ready = lyricQa.pass;
     const score = scoreTrack({ coverage: lyricQa.coverage, nameHeard, duration, requested, techWarnings: tech.warnings.length });
     await db
@@ -108,6 +110,7 @@ export async function processTrack(opts: { request: SongRequest; generation: Gen
         duration,
         previewStart: choice.start,
         alignedWords: aligned,
+        coverKey,
         audioQa: tech as unknown as Record<string, unknown>,
         quality: { ...lyricQa, stage: "lyrics", previewReason: choice.reason, note: "Timestamp alignment is a heuristic, not proof every word was sung correctly." } as unknown as Record<string, unknown>,
         nameHeard,

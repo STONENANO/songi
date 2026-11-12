@@ -177,6 +177,9 @@ CREATE INDEX IF NOT EXISTS feedback_request_idx ON feedback(request_id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id text;
 CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_pi_idx ON orders(stripe_payment_intent_id);
 
+-- Cover art saved to our storage
+ALTER TABLE song_versions ADD COLUMN IF NOT EXISTS cover_key text;
+
 -- Lock every table to the server. On Supabase the public schema is also served by
 -- its Data API; with RLS on and no policies, the anon and authenticated keys see
 -- nothing. The app connects as the database owner, which RLS does not restrict.
