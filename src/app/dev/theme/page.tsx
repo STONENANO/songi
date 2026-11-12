@@ -23,6 +23,9 @@ import {
   ScreenTitle,
   Stages,
   StudioCard,
+  MascotStage,
+  MASCOT_CLIPS,
+  type MascotClip,
   TextArea,
   TextInput,
   Tile,
@@ -105,6 +108,8 @@ export default function ThemePreview() {
         <div className="ui-mt"><ProgressBar value={0.42} label="Recording vocals" /></div>
       </Card>
 
+      <MascotPreview />
+      <div className="ui-mt" />
       <StudioCard messages={["Recording Rasheda's song", "Singing about “math class”"]} sub="R&B · written for Rasheda" />
 
       <Card title="Lyrics">
@@ -122,5 +127,22 @@ export default function ThemePreview() {
       <ErrorText>Error message</ErrorText>
       <p className="ui-pointer">👇 Pointer bar</p>
     </Screen>
+  );
+}
+
+/** Every wait-screen clip, switchable, so a re-skin can check each one. */
+function MascotPreview() {
+  const [clip, setClip] = useState<MascotClip>("writing");
+  return (
+    <div className="ui-stack">
+      <MascotStage clip={clip} label={`Clip: ${clip}`} rec={clip !== "writing"} />
+      <Chips>
+        {MASCOT_CLIPS.map((c) => (
+          <Chip key={c} selected={c === clip} onClick={() => setClip(c)}>
+            {c}
+          </Chip>
+        ))}
+      </Chips>
+    </div>
   );
 }

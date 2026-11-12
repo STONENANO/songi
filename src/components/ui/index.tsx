@@ -560,3 +560,60 @@ export function WaitVideo({ src }: { src: string }) {
     </div>
   );
 }
+
+/* ------------------------------ mascot stage -------------------------------- */
+
+/** The mascot's looping clips, one per step of making a song. Files live in /public/brand/wait. */
+export const MASCOT_CLIPS = ["writing", "music", "vocals", "name", "mixing", "checking"] as const;
+export type MascotClip = (typeof MASCOT_CLIPS)[number];
+
+/**
+ * The wait-screen mascot. Plays the clip for the current step and crossfades when the step
+ * changes. Only the current and outgoing clips are mounted, so the page loads one small video
+ * at a time. The poster frame shows straight away, stays if a video can't play, and is all
+ * that shows when the viewer prefers reduced motion. `label` is the status line in the bubble.
+ */
+export function MascotStage({ clip, label, rec }: { clip: MascotClip; label?: ReactNode; rec?: boolean }) {
+  const [layers, setLayers] = useState<{ clip: MascotClip; key: number }[]>([{ clip, key: 0 }]);
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    setStill(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }, []);
+  useEffect(() => {
+    setLayers((ls) => (ls[ls.length - 1].clip === clip ? ls : [...ls.slice(-1), { clip, key: ls[ls.length - 1].key + 1 }]));
+  }, [clip]);
+  // Drop the outgoing clip once the crossfade is done.
+  useEffect(() => {
+    if (layers.length < 2) return;
+    const t = setTimeout(() => setLayers((ls) => ls.slice(-1)), 700);
+    return () => clearTimeout(t);
+  }, [layers]);
+  return (
+    <div className="ui-mascot">
+      {rec && <span className="ui-mascot__rec" aria-hidden>REC</span>}
+      {layers.map((l, i) => (
+        <MascotLayer key={l.key} clip={l.clip} still={still} leaving={i < layers.length - 1} />
+      ))}
+      {label && (
+        <p className="ui-mascot__bubble" key={String(label)} aria-live="polite">
+          {label}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function MascotLayer({ clip, still, leaving }: { clip: MascotClip; still: boolean; leaving: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const poster = `/brand/wait/${clip}.webp`;
+  return (
+    <div className={cx("ui-mascot__layer", leaving && "ui-mascot__layer--leaving")}>
+      {still || failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={poster} alt="" />
+      ) : (
+        <video src={`/brand/wait/${clip}.mp4`} poster={poster} autoPlay muted loop playsInline preload="auto" onError={() => setFailed(true)} aria-hidden />
+      )}
+    </div>
+  );
+}

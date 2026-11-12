@@ -63,6 +63,7 @@ The customer pages (quiz and song page) are built to be re-skinned without touch
 | Colours, fonts, spacing, motion | `src/app/theme.css` (design tokens only) |
 | Home page | `src/app/page.tsx`, `home.css`, `home-floaters.tsx` |
 | Mascot and 3D objects (made in Higgsfield) | `public/brand/mascot/`, `public/brand/objects/` |
+| Wait-screen mascot clips, one per step | `public/brand/wait/` (`MascotStage` in `components/ui`; step → clip in `app/r/[id]/song-view.tsx`) |
 | Shared UI pieces (tiles, chips, player, lyrics, bubbles…) | `src/components/ui/` |
 | Quiz behaviour / screens | `src/app/create/use-quiz.ts` / `screens.tsx` |
 | Song page behaviour / views | `src/app/r/[id]/use-song.ts` / `song-view.tsx` |
