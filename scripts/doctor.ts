@@ -12,7 +12,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
-import { env } from "../src/lib/env";
+import { env, productionConfigProblems } from "../src/lib/env";
 import { stripe } from "../src/lib/commerce/stripe";
 import { checkBucket } from "../src/lib/storage";
 import { MODEL_CAPS } from "../src/lib/songcraft/style";
@@ -78,7 +78,7 @@ async function checkKie() {
   } catch (e) {
     out("fail", "Kie.ai", `Could not reach Kie.ai: ${(e as Error).message}`);
   }
-  if (env.kieWebhookSecret === "change-me") out("warn", "Kie.ai", "KIE_WEBHOOK_SECRET is the default. Run `npm run doctor -- --fix` to generate one.");
+  if (!process.env.KIE_WEBHOOK_SECRET || process.env.KIE_WEBHOOK_SECRET === "change-me") out("warn", "Kie.ai", "KIE_WEBHOOK_SECRET is not set or is the old default. Run `npm run doctor -- --fix` to generate one.");
   if (!env.kieWebhookHmacKey) out("info", "Kie.ai", "KIE_WEBHOOK_HMAC_KEY not set (optional locally; set it in production from kie.ai settings).");
   if (/localhost|127\.0\.0\.1/.test(env.appUrl)) out("info", "Kie.ai", "APP_URL is localhost, so Kie.ai can't call back. That's fine: the song page polls Kie.ai instead.");
 }
@@ -163,6 +163,8 @@ async function checkPlatform() {
   }
   if (!process.env.MEDIA_SIGNING_SECRET) out(env.isProd ? "fail" : "warn", "Media", "MEDIA_SIGNING_SECRET not set (a dev default is used locally). Run `npm run doctor -- --fix`.");
   else out("ok", "Media", `MEDIA_SIGNING_SECRET set ${mask(process.env.MEDIA_SIGNING_SECRET)}.`);
+  // The same check a production server runs at startup (it refuses to start on any of these).
+  for (const p of productionConfigProblems()) out("fail", "Production", p);
   if (!process.env.ADMIN_TOKEN) out(env.isProd ? "fail" : "warn", "Admin", "ADMIN_TOKEN not set: /admin is open on this machine only (closed in production). Run `npm run doctor -- --fix`.");
   else out("ok", "Admin", "ADMIN_TOKEN set. Open /admin?token=<ADMIN_TOKEN> to see every test song and its feedback.");
   out("ok", "Writer", `Songwriter ${env.writerVersion}, ${env.lyricDrafts} first draft(s) per song.`);

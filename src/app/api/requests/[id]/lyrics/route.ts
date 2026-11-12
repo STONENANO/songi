@@ -5,6 +5,7 @@ import { requireProject } from "@/lib/http/guard";
 import { claimStatus } from "@/lib/pipeline/common";
 import { checkAction, ALREADY_ON_IT } from "@/lib/pipeline/states";
 import { rateLimit } from "@/lib/session/project";
+import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const g = await requireProject(req, id);
   if (g instanceof NextResponse) return g;
-  const parsed = Body.safeParse(await req.json().catch(() => null));
+  const body = await readJson(req, BODY_LIMITS.lyrics);
+  if (!body.ok) return body.response;
+  const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: "Please check your lyrics and try again." }, { status: 400 });
   // A song that failed while writing lyrics can ask for new ones ("Try again" on the song page).
   const retryAfterFailure = parsed.data.action === "regenerate" && g.r.status === "failed" && !!g.r.brief;

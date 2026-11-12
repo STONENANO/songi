@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { getDb, schema } from "@/lib/db";
 import { payWithTestCheckout } from "@/lib/commerce/orders";
 import { requireProject } from "@/lib/http/guard";
+import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,9 @@ export const runtime = "nodejs";
  */
 export async function POST(req: Request) {
   if (!env.testCheckoutAllowed) return NextResponse.json({ error: "Not available" }, { status: 404 });
-  const parsed = z.object({ orderId: z.string().uuid() }).safeParse(await req.json().catch(() => null));
+  const body = await readJson(req, BODY_LIMITS.small);
+  if (!body.ok) return body.response;
+  const parsed = z.object({ orderId: z.string().uuid() }).safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
   const db = await getDb();
   const [order] = await db.select().from(schema.orders).where(eq(schema.orders.id, parsed.data.orderId)).limit(1);

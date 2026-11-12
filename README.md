@@ -115,7 +115,7 @@ Sandbox and live mode keep separate tax settings and registrations, so do steps 
 
 ## Production checklist
 
-- Set `MEDIA_SIGNING_SECRET`, `KIE_WEBHOOK_SECRET` and `KIE_WEBHOOK_HMAC_KEY` (from kie.ai settings).
+- Set `MEDIA_SIGNING_SECRET`, `KIE_WEBHOOK_SECRET` and `KIE_WEBHOOK_HMAC_KEY` (from kie.ai settings). A production server (`NODE_ENV=production`) **refuses to start** and lists what is missing when any of these is unset or a placeholder, when `STRIPE_ENABLED=true` lacks a Stripe key or `STRIPE_WEBHOOK_SECRET`, or when `STORAGE_DRIVER=s3` lacks an `S3_*` setting.
 - Use Postgres (`DATABASE_URL`) and private S3/R2 storage (`STORAGE_DRIVER=s3`).
 - Set `STRIPE_ENABLED=true` (payments are off by default). In Stripe: set `STRIPE_SECRET_KEY` (a restricted `rk_live_` key is safer), `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`. Add the webhook endpoint `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed` and `charge.refunded`. Add `payment_intent.succeeded` and `payment_intent.canceled` too while orders from before this change are still open. Turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay. To collect tax, follow "Stripe Tax" above in live mode.
 - Run on a long-running Node host; background work uses Next's `after()`.

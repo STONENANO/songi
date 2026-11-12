@@ -1,8 +1,9 @@
 import { NextResponse, after } from "next/server";
 import { env } from "@/lib/env";
 import { handleKieCallback } from "@/lib/pipeline/run";
-import { verifyCallbackParams, verifyKieSignature } from "@/lib/kie/client";
+import { verifyCallbackParams, verifyKieSignature, verifyLegacySecret } from "@/lib/kie/client";
 import { KieCallbackSchema } from "@/lib/kie/types";
+import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
 
@@ -20,10 +21,12 @@ export async function POST(req: Request) {
   const url = new URL(req.url);
   const gid = url.searchParams.get("gid");
   const ourSig = verifyCallbackParams(gid, url.searchParams.get("sig"));
-  const legacy = !gid && url.searchParams.get("secret") === env.kieWebhookSecret;
+  const legacy = !gid && verifyLegacySecret(url.searchParams.get("secret"));
   if (!ourSig && !legacy) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const parsed = KieCallbackSchema.safeParse(await req.json().catch(() => null));
+  const body = await readJson(req, BODY_LIMITS.webhook);
+  if (!body.ok) return body.response;
+  const parsed = KieCallbackSchema.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: "bad payload" }, { status: 400 });
   const taskId = parsed.data.data.task_id ?? parsed.data.data.taskId ?? null;
 

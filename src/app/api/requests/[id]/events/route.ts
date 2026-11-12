@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import { logEvent } from "@/lib/pipeline/common";
 import { requireProject } from "@/lib/http/guard";
 import { rateLimit } from "@/lib/session/project";
+import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
 
@@ -13,7 +14,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const g = await requireProject(req, id);
   if (g instanceof NextResponse) return g;
-  const parsed = Body.safeParse(await req.json().catch(() => null));
+  const body = await readJson(req, BODY_LIMITS.small);
+  if (!body.ok) return body.response;
+  const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: "bad event" }, { status: 400 });
   if (!rateLimit(`events:${id}`, 200, 60 * 60_000)) return NextResponse.json({ ok: true });
   await logEvent(id, parsed.data.type, { versionId: parsed.data.versionId, position: parsed.data.position });

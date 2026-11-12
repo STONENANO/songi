@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import { probeAnswer, mockProbe } from "@/lib/songcraft/probe";
 import { env } from "@/lib/env";
 import { rateLimit, clientIp } from "@/lib/session/project";
+import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,9 @@ const Body = z.object({
 
 /** Never fails the quiz: on any model error, fall back to the rule-based probe. */
 export async function POST(req: Request) {
-  const parsed = Body.safeParse(await req.json().catch(() => null));
+  const body = await readJson(req, BODY_LIMITS.small);
+  if (!body.ok) return body.response;
+  const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ reaction: "", followUp: "", ingredients: [] });
   // Each call costs a model request: past the per-connection limit, use the free rule-based version.
   if (!rateLimit(`probe:${clientIp(req)}`, env.isProd ? 40 : 1000, 60 * 60_000)) return NextResponse.json(mockProbe(parsed.data));

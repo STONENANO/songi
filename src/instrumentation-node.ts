@@ -1,6 +1,13 @@
 /** Node-only startup work, imported from instrumentation.ts so the edge bundle never sees it. */
 export async function startupChecks() {
-  const { env } = await import("./lib/env");
+  const { env, productionConfigProblems } = await import("./lib/env");
+  // A production server with a missing or default secret must not take traffic: stop here,
+  // with every problem listed (setting names only, never values) in the deploy log.
+  const problems = productionConfigProblems();
+  if (problems.length) {
+    console.error(`[config] Refusing to start: production settings are missing.\n- ${problems.join("\n- ")}`);
+    process.exit(1);
+  }
   if (env.storageDriver !== "s3") return;
   const missing = (["S3_BUCKET", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const).filter((k) => !process.env[k]);
   if (missing.length) {
