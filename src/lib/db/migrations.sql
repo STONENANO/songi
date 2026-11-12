@@ -171,4 +171,21 @@ CREATE TABLE IF NOT EXISTS feedback (
   note text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS feedback_request_idx ON feedback(request_id)
+CREATE INDEX IF NOT EXISTS feedback_request_idx ON feedback(request_id);
+
+-- Stripe payments (replaces Shopify checkout)
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id text;
+CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_pi_idx ON orders(stripe_payment_intent_id);
+
+-- Lock every table to the server. On Supabase the public schema is also served by
+-- its Data API; with RLS on and no policies, the anon and authenticated keys see
+-- nothing. The app connects as the database owner, which RLS does not restrict.
+ALTER TABLE song_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lyric_drafts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE generations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE song_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cost_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;

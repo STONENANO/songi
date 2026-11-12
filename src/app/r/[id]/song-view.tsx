@@ -79,9 +79,9 @@ export default function SongView({ id }: { id: string }) {
 
   return (
     <Screen animKey={phase}>
-      {view.mock.banner && (view.mock.llm || view.mock.kie || view.mock.shopify) && (
+      {view.mock.banner && (view.mock.llm || view.mock.kie || view.mock.payments) && (
         <Banner>
-          Test mode: {[view.mock.llm && "placeholder lyrics", view.mock.kie && "test-tone audio", view.mock.shopify && "test checkout"].filter(Boolean).join(", ")}. Add API keys in .env for real songs and payments.
+          Test mode: {[view.mock.llm && "placeholder lyrics", view.mock.kie && "test-tone audio", view.mock.payments && "test checkout"].filter(Boolean).join(", ")}. Add API keys in .env for real songs and payments.
         </Banner>
       )}
       {phase === "writing" && <Writing view={view} />}

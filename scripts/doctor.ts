@@ -4,7 +4,7 @@
  *   npm run doctor -- --fix   # also generate local signing secrets if missing
  *
  * Calls made (all free, read-only): Anthropic model lookup, Kie.ai credit
- * balance, Shopify Storefront shop + variant query, Shopify Admin shop query.
+ * balance, Stripe account and key modes.
  */
 import "./load-env";
 import fs from "node:fs";
@@ -13,6 +13,8 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "../src/lib/env";
+import { stripe } from "../src/lib/commerce/stripe";
+import { checkBucket } from "../src/lib/storage";
 import { MODEL_CAPS } from "../src/lib/songcraft/style";
 
 type Level = "ok" | "warn" | "fail" | "info";
@@ -81,41 +83,24 @@ async function checkKie() {
   if (/localhost|127\.0\.0\.1/.test(env.appUrl)) out("info", "Kie.ai", "APP_URL is localhost, so Kie.ai can't call back. That's fine: the song page polls Kie.ai instead.");
 }
 
-async function checkShopify() {
-  const s = env.shopify;
-  const any = s.storeDomain || s.storefrontToken || s.songVariantId || s.webhookSecret;
-  if (!any) return out("info", "Shopify", "Not configured: checkout uses the local test page (no real payments).");
-  const missing = [["SHOPIFY_STORE_DOMAIN", s.storeDomain], ["SHOPIFY_STOREFRONT_TOKEN", s.storefrontToken], ["SHOPIFY_SONG_VARIANT_ID", s.songVariantId], ["SHOPIFY_WEBHOOK_SECRET", s.webhookSecret]].filter(([, v]) => !v).map(([k]) => k);
-  if (missing.length) out("fail", "Shopify", `Partly configured; missing ${missing.join(", ")}. Until all are set, test checkout is used.`);
-  if (s.songVariantId && !/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(s.songVariantId)) out("fail", "Shopify", "SHOPIFY_SONG_VARIANT_ID must look like gid://shopify/ProductVariant/123456789.");
-  if (s.storeDomain && !/\.myshopify\.com$/.test(s.storeDomain)) out("warn", "Shopify", `SHOPIFY_STORE_DOMAIN should be your-store.myshopify.com (got ${s.storeDomain}).`);
-  if (s.storeDomain && s.storefrontToken) {
+async function checkStripe() {
+  const s = env.stripe;
+  out("info", "Stripe", `Song price: ${env.priceLabel} (SONG_PRICE_CENTS=${env.songPriceCents}, ${env.currency.toUpperCase()}).`);
+  if (!s.secretKey && !s.publishableKey) return out("info", "Stripe", "Not configured: checkout uses the test button (no real payments).");
+  const missing = [["STRIPE_SECRET_KEY", s.secretKey], ["STRIPE_PUBLISHABLE_KEY", s.publishableKey], ["STRIPE_WEBHOOK_SECRET", s.webhookSecret]].filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length) out("fail", "Stripe", `Partly configured; missing ${missing.join(", ")}.`);
+  const live = (k: string) => (k.includes("_live_") ? "live" : k.includes("_test_") ? "test" : "unknown");
+  if (s.secretKey && s.publishableKey && live(s.secretKey) !== live(s.publishableKey)) out("fail", "Stripe", "Secret and publishable keys are from different modes (one test, one live).");
+  if (s.webhookSecret && !s.webhookSecret.startsWith("whsec_")) out("fail", "Stripe", "STRIPE_WEBHOOK_SECRET should start with whsec_.");
+  if (s.secretKey) {
     try {
-      const res = await fetch(`https://${s.storeDomain}/api/${s.apiVersion}/graphql.json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Shopify-Storefront-Access-Token": s.storefrontToken },
-        body: JSON.stringify({ query: `query($id: ID!) { shop { name } node(id: $id) { ... on ProductVariant { title availableForSale price { amount currencyCode } product { title } } } }`, variables: { id: s.songVariantId || "gid://shopify/ProductVariant/0" } }),
-        signal: AbortSignal.timeout(20_000),
-      });
-      const j = (await res.json().catch(() => null)) as { data?: { shop?: { name: string }; node?: { title: string; availableForSale: boolean; price: { amount: string; currencyCode: string }; product: { title: string } } | null }; errors?: { message: string }[] } | null;
-      if (!res.ok || !j?.data?.shop) out("fail", "Shopify", `Storefront token rejected (HTTP ${res.status}). Check SHOPIFY_STOREFRONT_TOKEN and the store domain.`);
-      else {
-        out("ok", "Shopify", `Storefront works for "${j.data.shop.name}".`);
-        const v = j.data.node;
-        if (s.songVariantId && !v) out("fail", "Shopify", "Song variant not found or not published to the Storefront sales channel.");
-        else if (v) {
-          out(v.availableForSale ? "ok" : "fail", "Shopify", `Song product "${v.product.title} / ${v.title}" at ${v.price.amount} ${v.price.currencyCode}${v.availableForSale ? "" : " is NOT available for sale"}.`);
-          if (!s.priceLabel.includes(String(Math.round(Number(v.price.amount))))) out("warn", "Shopify", `SONG_PRICE_LABEL (${s.priceLabel}) doesn't match the Shopify price. The label is display-only; checkout always charges Shopify's price.`);
-        }
-      }
+      const acct = await stripe().accounts.retrieve(null);
+      out("ok", "Stripe", `Key works for ${acct.settings?.dashboard?.display_name || acct.id} (${live(s.secretKey)} mode). Charges ${acct.charges_enabled ? "enabled" : "NOT enabled yet"}.`);
     } catch (e) {
-      out("fail", "Shopify", `Could not reach Shopify: ${(e as Error).message}`);
+      out("fail", "Stripe", `Secret key rejected: ${(e as Error).message}`);
     }
   }
-  if (s.adminToken && s.storeDomain) {
-    const res = await fetch(`https://${s.storeDomain}/admin/api/${s.apiVersion}/shop.json`, { headers: { "X-Shopify-Access-Token": s.adminToken }, signal: AbortSignal.timeout(20_000) }).catch(() => null);
-    out(res?.ok ? "ok" : "warn", "Shopify", res?.ok ? "Admin token works (orders will be double-checked)." : "Admin token rejected; orders will rely on the signed webhook only.");
-  }
+  out("info", "Stripe", `Webhook endpoint to add in Stripe: ${env.appUrl}/api/webhooks/stripe (events: payment_intent.succeeded, payment_intent.canceled, payment_intent.payment_failed, charge.refunded).`);
 }
 
 async function checkPlatform() {
@@ -140,7 +125,13 @@ async function checkPlatform() {
       out("fail", "Database", `Postgres connection failed: ${(e as Error).message}`);
     }
   } else out("info", "Database", "No DATABASE_URL: using the built-in local database in ./data.");
+  await checkStorage();
   out("info", "Budget", `Up to ${env.desiredCandidates} versions per song, max ${env.maxTasksPerProject} tasks and ~$${env.maxEstSpendUsd.toFixed(2)} estimated generation spend per song.`);
+}
+
+async function checkStorage() {
+  const r = await checkBucket();
+  out(r.ok ? (env.storageDriver === "s3" ? "ok" : "info") : "fail", "Storage", env.storageDriver === "s3" ? r.message : `${r.message} Set STORAGE_DRIVER=s3 for Cloudflare R2.`);
 }
 
 async function main() {
@@ -149,10 +140,10 @@ async function main() {
     out("ok", "setup", "Created .env from .env.example.");
   }
   if (process.argv.includes("--fix")) fixSecrets();
-  console.log(`\nMode: Claude ${env.mockLlm ? "MOCK" : "LIVE"} · Kie.ai ${env.mockKie ? "MOCK" : "LIVE"} · Shopify ${env.mockShopify ? "TEST CHECKOUT" : "LIVE"}\n`);
+  console.log(`\nMode: Claude ${env.mockLlm ? "MOCK" : "LIVE"} · Kie.ai ${env.mockKie ? "MOCK" : "LIVE"} · Payments ${env.mockPayments ? "TEST CHECKOUT" : "LIVE (Stripe)"}\n`);
   await checkAnthropic();
   await checkKie();
-  await checkShopify();
+  await checkStripe();
   await checkPlatform();
   console.log(failures ? `\n${failures} problem(s) to fix.` : "\nAll checks passed.");
   process.exit(failures ? 1 : 0);

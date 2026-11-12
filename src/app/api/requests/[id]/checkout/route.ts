@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 const Body = z.object({ versionId: z.string().uuid() });
 
-/** Only a version id comes from the client. Price comes from Shopify; ownership is checked server-side. */
+/** Only a version id comes from the client. The price is set on the server (SONG_PRICE_CENTS); ownership is checked server-side. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const g = await requireProject(req, id, { allowLegacy: false });

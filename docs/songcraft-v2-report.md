@@ -1,3 +1,5 @@
+> Note (later): Shopify checkout described below was replaced by a custom Stripe checkout (`src/lib/commerce/stripe.ts`, `/checkout/[orderId]`, `/api/webhooks/stripe`).
+
 # Songcraft v2: implementation report
 
 Status: implemented and tested in mock mode. Nothing in this report was verified against the real Claude, Kie.ai or Shopify APIs, because no credentials were available in the build environment. Every claim about songwriting quality is a design intent until the golden suite and human listening tests run with real keys.

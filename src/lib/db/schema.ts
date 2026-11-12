@@ -144,6 +144,9 @@ export const orders = pgTable("orders", {
   offerId: text("offer_id"),
   cartId: text("cart_id"),
   checkoutUrl: text("checkout_url"),
+  /** Stripe PaymentIntent paying for this order (pi_...). */
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  /** Legacy columns from the removed Shopify checkout, kept so old rows still load. */
   shopifyOrderId: text("shopify_order_id"),
   amountCents: integer("amount_cents"),
   currency: text("currency"),

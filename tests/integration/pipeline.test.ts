@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../src/lib/db";
 import { runBriefing, startGeneration, pollIfGenerating, getRequestView, selectVersion, handleKieCallback, latestDraft } from "../../src/lib/pipeline/run";
-import { startCheckout, handleShopifyWebhook, mockPaidOrderPayload } from "../../src/lib/commerce/orders";
-import { signShopifyBody } from "../../src/lib/commerce/shopify";
+import { startCheckout, handleStripeWebhook, payWithTestCheckout } from "../../src/lib/commerce/orders";
+import { signForTests } from "../../src/lib/commerce/stripe";
 import { mockKieControl } from "../../src/lib/kie/client";
 import { songcraftHooks, resetMockCounters } from "../../src/lib/songcraft/mock";
 import { getStorage } from "../../src/lib/storage";
@@ -43,11 +43,13 @@ async function versionsFor(id: string) {
   return db.select().from(schema.songVersions).where(eq(schema.songVersions.requestId, id));
 }
 
-function paidWebhook(orderId: string, versionId: string, eventId: string, shopifyId?: number) {
-  const payload = mockPaidOrderPayload(orderId, versionId);
-  if (shopifyId) payload.id = shopifyId;
-  const raw = JSON.stringify(payload);
-  return { raw, headers: new Headers({ "x-shopify-hmac-sha256": signShopifyBody(raw, env.mockShopifyWebhookSecret), "x-shopify-topic": "orders/paid", "x-shopify-event-id": eventId }) };
+/** A Stripe webhook delivery, signed with the test webhook secret (tests/setup.ts). */
+function stripeEvent(eventId: string, type: string, object: Record<string, unknown>) {
+  const raw = JSON.stringify({ id: eventId, object: "event", type, data: { object }, api_version: "2026-10-01", created: Math.floor(Date.now() / 1000), livemode: false, pending_webhooks: 1, request: null });
+  return { raw, headers: new Headers({ "stripe-signature": signForTests(raw, "whsec_test_secret") }) };
+}
+function succeededIntent(orderId: string, piId: string, amount = env.songPriceCents) {
+  return { id: piId, object: "payment_intent", status: "succeeded", amount_received: amount, currency: env.currency, metadata: { order_id: orderId } };
 }
 
 beforeEach(() => {
@@ -196,7 +198,7 @@ test("selection persists; only the purchased version unlocks; duplicate and seco
   const co = await startCheckout(id, a.id);
   assert.ok(co.ok);
   if (!co.ok) return;
-  assert.match(co.checkoutUrl, /\/checkout\/mock\//);
+  assert.match(co.checkoutUrl, /^\/checkout\/[0-9a-f-]{36}$/);
   const again = await startCheckout(id, a.id);
   assert.ok(again.ok && again.reused, "abandoned checkout is reused, not duplicated");
 
@@ -204,14 +206,23 @@ test("selection persists; only the purchased version unlocks; duplicate and seco
   assert.ok((await getRequestView(id))!.candidates.every((c) => !c.downloadUrl));
   assert.equal((await getRequestView(id))?.order?.status, "pending");
 
-  const bad = paidWebhook(co.orderId, a.id, "evt-bad");
-  assert.equal((await handleShopifyWebhook(bad.raw + " ", bad.headers)).status, 401, "tampered body rejected");
+  // The checkout page attaches a PaymentIntent to the order (done by prepareCheckout with real keys).
+  const db0 = await getDb();
+  await db0.update(schema.orders).set({ stripePaymentIntentId: "pi_test_1" }).where(eq(schema.orders.id, co.orderId));
 
-  const w = paidWebhook(co.orderId, a.id, "evt-1");
-  assert.equal((await handleShopifyWebhook(w.raw, w.headers)).result, "fulfilled");
-  assert.equal((await handleShopifyWebhook(w.raw, w.headers)).result, "duplicate_delivery");
-  const other = paidWebhook(co.orderId, a.id, "evt-2", 123456789);
-  assert.equal((await handleShopifyWebhook(other.raw, other.headers)).result, "duplicate_payment");
+  const bad = stripeEvent("evt_bad", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_test_1"));
+  assert.equal((await handleStripeWebhook(bad.raw + " ", bad.headers)).status, 400, "tampered body rejected");
+
+  const short = stripeEvent("evt_short", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_test_1", 100));
+  assert.equal((await handleStripeWebhook(short.raw, short.headers)).result, "amount_mismatch", "underpayment never unlocks");
+  assert.equal((await getRequestView(id))?.order?.status, "pending");
+
+  const w = stripeEvent("evt_1", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_test_1"));
+  assert.equal((await handleStripeWebhook(w.raw, w.headers)).result, "fulfilled");
+  assert.equal((await handleStripeWebhook(w.raw, w.headers)).result, "duplicate_delivery");
+  const other = stripeEvent("evt_2", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_someone_else"));
+  assert.equal((await handleStripeWebhook(other.raw, other.headers)).result, "intent_mismatch", "a payment that isn't this order's never unlocks it");
+  assert.equal(await payWithTestCheckout(co.orderId), "already_paid", "paying again is a no-op");
 
   const after = await getRequestView(id);
   assert.equal(after?.status, "purchased");
@@ -221,7 +232,7 @@ test("selection persists; only the purchased version unlocks; duplicate and seco
   const db = await getDb();
   const ords = await db.select().from(schema.orders).where(eq(schema.orders.requestId, id));
   assert.equal(ords.filter((o) => o.status === "paid").length, 1);
-  assert.equal(ords.filter((o) => o.status === "duplicate_payment").length, 1);
+  assert.equal(ords.find((o) => o.status === "paid")?.stripePaymentIntentId, "pi_test_1");
 
   // Full media: the paid version serves; an unpaid version's full file is refused even with a valid token.
   const paidRes = await mediaGET(new Request("http://x/"), { params: Promise.resolve({ token: paid[0].downloadUrl!.split("/").pop()! }) });
@@ -233,9 +244,8 @@ test("selection persists; only the purchased version unlocks; duplicate and seco
 
   // Refund revokes access.
   const order = ords.find((o) => o.status === "paid")!;
-  const refund = JSON.stringify({ id: 1, order_id: order.shopifyOrderId });
-  const rh = new Headers({ "x-shopify-hmac-sha256": signShopifyBody(refund, env.mockShopifyWebhookSecret), "x-shopify-topic": "refunds/create", "x-shopify-event-id": "evt-refund" });
-  assert.equal((await handleShopifyWebhook(refund, rh)).result, "refunded");
+  const refund = stripeEvent("evt_refund", "charge.refunded", { id: "ch_1", object: "charge", refunded: true, payment_intent: order.stripePaymentIntentId });
+  assert.equal((await handleStripeWebhook(refund.raw, refund.headers)).result, "refunded");
   const tok = paid[0].downloadUrl!.split("/").pop()!;
   assert.equal((await mediaGET(new Request("http://x/"), { params: Promise.resolve({ token: tok }) })).status, 403);
 });

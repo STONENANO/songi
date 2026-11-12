@@ -8,14 +8,13 @@ import "./load-env";
 import { getDb, schema } from "../src/lib/db";
 import { env } from "../src/lib/env";
 import { runBriefing, submitFollowUpAnswers, startGeneration, pollIfGenerating, getRequestView, selectVersion } from "../src/lib/pipeline/run";
-import { startCheckout, handleShopifyWebhook, mockPaidOrderPayload } from "../src/lib/commerce/orders";
-import { signShopifyBody } from "../src/lib/commerce/shopify";
+import { startCheckout, payWithTestCheckout } from "../src/lib/commerce/orders";
 import { newProjectToken } from "../src/lib/session/project";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
-  console.log(`mode: llm=${env.mockLlm ? "mock" : env.llmModel}, kie=${env.mockKie ? "mock" : env.kieModel}, shopify=${env.mockShopify ? "mock" : env.shopify.storeDomain}`);
+  console.log(`mode: llm=${env.mockLlm ? "mock" : env.llmModel}, kie=${env.mockKie ? "mock" : env.kieModel}, payments=${env.mockPayments ? "test" : "stripe"}`);
   const db = await getDb();
   const [row] = await db
     .insert(schema.songRequests)
@@ -65,10 +64,10 @@ async function main() {
   const co = await startCheckout(id, pick.id);
   if (!co.ok) throw new Error(co.error);
   console.log(`checkout: ${co.checkoutUrl}`);
-  if (env.mockShopify) {
-    const raw = JSON.stringify(mockPaidOrderPayload(co.orderId, pick.id));
-    const headers = new Headers({ "x-shopify-hmac-sha256": signShopifyBody(raw, env.mockShopifyWebhookSecret), "x-shopify-topic": "orders/paid", "x-shopify-event-id": `smoke-${co.orderId}` });
-    console.log("webhook:", (await handleShopifyWebhook(raw, headers)).result, "| retry:", (await handleShopifyWebhook(raw, headers)).result);
+  if (env.mockPayments) {
+    console.log("test payment:", await payWithTestCheckout(co.orderId), "| again:", await payWithTestCheckout(co.orderId));
+  } else {
+    console.log("Stripe is configured: pay at", `${env.appUrl}${co.checkoutUrl}`, "to finish (the smoke script does not charge cards).");
   }
   v = await getRequestView(id);
   console.log(`after purchase: ${v?.status}; unlocked: ${v?.candidates.filter((c) => c.downloadUrl).map((c) => c.label).join(", ") || "none"}; delivery ${v?.order?.deliveryLink ?? "-"}`);

@@ -1,7 +1,7 @@
 /**
  * Browser end-to-end test (mock providers). Requires Playwright and a running
  * dev server started with mock settings, e.g.:
- *   MOCK_LLM=1 MOCK_KIE=1 MOCK_SHOPIFY=1 MOCK_KIE_DELAY_MS=1500 npm run dev
+ *   MOCK_LLM=1 MOCK_KIE=1 MOCK_PAYMENTS=1 MOCK_KIE_DELAY_MS=1500 npm run dev
  *   npm run test:e2e
  */
 const { chromium } = require("playwright");
@@ -105,9 +105,20 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   const chosenId = (await (await page.request.get(`${BASE}/api/requests/${id}`)).json()).candidates.find((c) => c.selected).id;
   assert.equal(chosenId, api.candidates[1].id, "selection persisted");
   await page.click('button:has-text("full song ·")');
-  await page.waitForURL(/\/checkout\/mock\//);
+  // Our own checkout page (test mode without Stripe keys), then the post-purchase page.
+  await page.waitForURL(/\/checkout\/[0-9a-f-]{36}$/);
+  assert.ok(await page.isVisible("text=Linda's full song"), "checkout shows the song");
+  // A stranger can't open someone else's checkout.
+  const strangerPage = await (await browser.newContext()).newPage();
+  await strangerPage.goto(page.url());
+  assert.ok(await strangerPage.isVisible("text=started on another device"), "checkout is owner-only");
+  await strangerPage.context().close();
   await shot("e2e-3-checkout");
   await page.click('button:has-text("Pay (test)")');
+  await page.waitForURL(/\/checkout\/[0-9a-f-]{36}\/complete/, { timeout: 30000 });
+  await page.waitForSelector("text=Linda's song is yours", { timeout: 30000 });
+  await shot("e2e-3b-thank-you");
+  await page.click('a:has-text("Listen and download")');
   await page.waitForURL(songUrl, { timeout: 30000 });
   await page.waitForSelector('a:has-text("Download MP3")', { timeout: 30000 });
   await shot("e2e-4-purchased");
