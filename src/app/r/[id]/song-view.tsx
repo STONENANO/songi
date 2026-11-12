@@ -448,23 +448,29 @@ function NeedsInput({ view, song }: { view: RequestView; song: Song }) {
 
 function Failed({ view, song }: { view: RequestView; song: Song }) {
   const { name } = names(view);
-  const canRetry = !!view.draft?.singable && view.generation.canRequestMore;
+  // Recording failed: record again. Writing failed before any usable lyrics: write them again.
+  const canRecord = !!view.draft?.singable && view.generation.canRequestMore;
+  const canRewrite = !canRecord && !!view.brief;
+  const retry = canRecord ? () => song.record() : canRewrite ? () => song.newLyrics() : null;
   return (
     <>
-      <ScreenTitle title={`We hit a snag with ${name}'s song`} subtitle={canRetry ? "It happens now and then. Trying again usually works." : "Sorry about that. You can start a new song below."} />
+      <ScreenTitle
+        title={`We hit a snag with ${name}'s song`}
+        subtitle={retry ? "It happens now and then, and trying again almost always works. Your story is saved." : "Sorry about that. You can start a new song below."}
+      />
       <Card>
-        {canRetry ? (
-          <Button disabled={song.busy} onClick={() => void song.record()}>
-            Try recording again
+        {retry ? (
+          <Button block disabled={song.busy} onClick={() => void retry()}>
+            {song.busy ? "Starting…" : "Try again"}
           </Button>
         ) : (
-          <Button href="/create">Start a new song</Button>
+          <Button block href="/create">
+            Start a new song
+          </Button>
         )}
-        {view.lastError && (
-          <div className="ui-mt">
-            <Note>Details: {view.lastError}</Note>
-          </div>
-        )}
+        <div className="ui-mt">
+          <Note>If it keeps happening, reply to your email with this code: {view.id.slice(0, 8)}</Note>
+        </div>
       </Card>
     </>
   );
