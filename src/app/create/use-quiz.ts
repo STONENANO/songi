@@ -160,6 +160,44 @@ export function useQuiz() {
     if (p) goTo(p);
   }, [steps, index, goTo]);
 
+  /*
+   * Phone back button / swipe-back. The quiz lives on one URL, so without this
+   * "back" would leave the quiz. While past the first screen we keep one guard
+   * history entry; the browser's back pops it and we step back a question
+   * instead (and re-arm the guard). On the first screen back leaves as normal.
+   * Works after a refresh mid-quiz too, unlike one history entry per step.
+   */
+  const guardArmed = useRef(false);
+  const navRef = useRef({ index, steps });
+  navRef.current = { index, steps };
+  useEffect(() => {
+    if (!loaded || typeof window === "undefined") return;
+    if (index > 0 && !guardArmed.current) {
+      window.history.pushState({ quizGuard: true }, "");
+      guardArmed.current = true;
+    }
+  }, [index, loaded]);
+  useEffect(() => {
+    if (!loaded || typeof window === "undefined") return;
+    const onPop = () => {
+      if (!guardArmed.current) return; // nothing of ours to undo: let the browser leave
+      guardArmed.current = false;
+      const { index: i, steps: st } = navRef.current;
+      const prev = st[i - 1];
+      if (!prev) return;
+      track("quiz:browser_back", { from: st[i] ?? "" });
+      setS((p) => ({ ...p, stepId: prev }));
+      window.scrollTo({ top: 0 });
+      // Still mid-quiz: re-arm so the next back also steps back a question.
+      if (i - 1 > 0) {
+        window.history.pushState({ quizGuard: true }, "");
+        guardArmed.current = true;
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [loaded]);
+
   const toggleThread = useCallback((key: string) => {
     setS((p) => {
       const on = p.threads.includes(key);
