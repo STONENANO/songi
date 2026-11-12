@@ -2,8 +2,10 @@
 /** Song project state: polling and actions. No markup; song-view.tsx renders it. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RequestView } from "@/lib/pipeline/view";
+import { STEPS } from "@/lib/pipeline/states";
 
-const WORKING = new Set(["draft", "briefing", "writing_lyrics", "generating", "processing"]);
+/** Statuses where the server is working and the page keeps checking (from the shared table). */
+const isWorking = (status: RequestView["status"]) => STEPS[status]?.working ?? false;
 
 export type Phase = "loading" | "missing" | "denied" | "writing" | "review" | "recording" | "versions" | "needs_input" | "failed";
 
@@ -56,25 +58,44 @@ export function useSong(id: string) {
   }, [load]);
 
   const pendingOrder = view?.order?.status === "pending";
-  const working = !!view && (WORKING.has(view.status) || autoRecordPending(view));
+  // After an action, keep checking quickly until the song leaves the status it was in,
+  // even on screens that normally wait for the buyer (e.g. the questions screen).
+  const [awaiting, setAwaiting] = useState<{ from: string; until: number } | null>(null);
   useEffect(() => {
-    if (!working && !pendingOrder) return;
-    const t = setInterval(load, pendingOrder ? 4000 : 3000);
+    if (awaiting && view && (view.status !== awaiting.from || Date.now() > awaiting.until)) setAwaiting(null);
+  }, [awaiting, view]);
+  const working = !!view && (isWorking(view.status) || autoRecordPending(view));
+  useEffect(() => {
+    if (!working && !pendingOrder && !awaiting) return;
+    const t = setInterval(load, awaiting ? 1500 : pendingOrder ? 4000 : 3000);
     return () => clearInterval(t);
-  }, [working, pendingOrder, load]);
+  }, [working, pendingOrder, awaiting, load]);
 
+  // An error belongs to the screen it happened on: clear it when the screen changes.
+  const phase = phaseOf(view, problem);
+  useEffect(() => setError(null), [phase]);
+
+  // One action at a time: a second click while the first is in flight is ignored.
+  const inFlight = useRef(false);
   const post = useCallback(
-    async (path: string, body: unknown): Promise<Record<string, unknown> | null> => {
+    async (path: string, body: unknown, opts: { movesOn?: boolean } = {}): Promise<Record<string, unknown> | null> => {
+      if (inFlight.current) return null;
+      inFlight.current = true;
       setBusy(true);
       setError(null);
+      const from = view?.status;
       const res = await fetch(`/api/requests/${id}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
       const json = (res ? await res.json().catch(() => ({})) : {}) as Record<string, unknown>;
-      if (!res?.ok) setError((json.error as string) ?? "Something went wrong. Please try again.");
-      setBusy(false);
+      if (!res) setError("We couldn't reach the server. Check your connection and try again.");
+      else if (!res.ok) setError((json.error as string) ?? "Something went wrong. Please try again.");
+      // Started the next step (or it was already under way): check quickly until the screen moves on.
+      if (res?.ok && from && opts.movesOn) setAwaiting({ from, until: Date.now() + 60_000 });
       await load();
+      setBusy(false);
+      inFlight.current = false;
       return res?.ok ? json : null;
     },
-    [id, load],
+    [id, load, view?.status],
   );
 
   /** Preview play/complete analytics, once per version. */
@@ -90,13 +111,14 @@ export function useSong(id: string) {
 
   return {
     view,
-    phase: phaseOf(view, problem),
-    busy,
+    phase,
+    /** True from a click until the screen has moved on, so buttons stay disabled in between. */
+    busy: busy || !!awaiting,
     error,
     pendingOrder,
-    answerFollowUps: (answers: Record<string, string>) => post("/answers", { answers }),
-    record: (draftId?: string) => post("/generate", draftId ? { draftId } : {}),
-    moreTakes: () => post("/generate", { more: true }),
+    answerFollowUps: (answers: Record<string, string>) => post("/answers", { answers }, { movesOn: true }),
+    record: (draftId?: string) => post("/generate", draftId ? { draftId } : {}, { movesOn: true }),
+    moreTakes: () => post("/generate", { more: true }, { movesOn: true }),
     select: (versionId: string) => post("/select", { versionId }),
     buy: async (versionId: string) => {
       const j = await post("/checkout", { versionId });
@@ -110,9 +132,9 @@ export function useSong(id: string) {
         setError("We saved your edit, but it needs a small fix before we can sing it. See the notes on the lyrics.");
         return true;
       }
-      return !!(await post("/generate", {}));
+      return !!(await post("/generate", {}, { movesOn: true }));
     },
-    newLyrics: () => post("/lyrics", { action: "regenerate" }),
+    newLyrics: () => post("/lyrics", { action: "regenerate" }, { movesOn: true }),
     sendFeedback: async (body: { rating: number; wouldPay: string | null; note: string; versionId: string | null }) => {
       const res = await fetch(`/api/requests/${id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
       return !!res?.ok;

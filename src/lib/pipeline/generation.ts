@@ -149,7 +149,7 @@ async function nextSlot(draftId: string): Promise<number> {
 export async function startGeneration(requestId: string, opts: { draftId?: string; trigger?: "customer" | "extra" } = {}): Promise<{ ok: true; submitted: number } | { ok: false; error: string }> {
   const r = await getRequest(requestId);
   if (!r) return { ok: false, error: "Not found" };
-  if (!["lyrics_ready", "preview_ready", "failed"].includes(r.status)) return { ok: false, error: `Cannot record while status is ${r.status}.` };
+  if (!["lyrics_ready", "preview_ready", "failed"].includes(r.status)) return { ok: false, error: "Your song isn't ready to record right now. This page updates on its own." };
   const db = await getDb();
   const draft = opts.draftId
     ? (await db.select().from(lyricDrafts).where(and(eq(lyricDrafts.id, opts.draftId), eq(lyricDrafts.requestId, requestId))).limit(1))[0]
@@ -168,7 +168,7 @@ export async function startGeneration(requestId: string, opts: { draftId?: strin
   const count = trigger === "extra" ? 1 : initialTaskCount({ desired: env.desiredCandidates, expectedTracks: env.expectedTracksPerTask, collection: env.candidateCollection, maxAuto: env.maxAutoTasks });
 
   const budget = canSubmitTask(await budgetInput(requestId, draft.id, trigger), budgetConfig());
-  if (!budget.ok) return { ok: false, error: `No more recordings available for this song (${budget.reason}).` };
+  if (!budget.ok) return { ok: false, error: "You've used all the recordings for this song." };
 
   await db.update(lyricDrafts).set({ approved: true }).where(eq(lyricDrafts.id, draft.id));
   if (!sameDraft) {

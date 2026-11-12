@@ -23,7 +23,8 @@ import {
   type DraftEval,
   type QuizInput,
 } from "../songcraft";
-import { logEvent, setStatus, failRequest, getRequest, recordLlmUsage } from "./common";
+import { logEvent, setStatus, failRequest, getRequest, recordLlmUsage, claimStatus } from "./common";
+import { ACTIONS } from "./states";
 
 export { getRequest } from "./common";
 import { startGeneration } from "./generation";
@@ -102,12 +103,16 @@ export async function maybeAutoRecord(requestId: string): Promise<void> {
   await logEvent(requestId, "generation:auto_record", result.ok ? { submitted: result.submitted } : { error: result.error });
 }
 
-export async function submitFollowUpAnswers(requestId: string, answers: Record<string, string>): Promise<void> {
+/**
+ * Save follow-up answers and start writing. The status moves to "briefing" in the same
+ * update, before this returns, so the song page shows "writing" on its very next check.
+ * Returns "already" when the answers were sent before (a double click or second tab).
+ */
+export async function submitFollowUpAnswers(requestId: string, answers: Record<string, string>): Promise<"started" | "already" | "not_waiting"> {
+  const claimed = await claimStatus(requestId, ACTIONS.answer.from, "briefing", { followUpAnswers: answers });
+  if (claimed) return "started";
   const r = await getRequest(requestId);
-  if (!r || r.status !== "needs_input") return;
-  const db = await getDb();
-  await db.update(songRequests).set({ followUpAnswers: answers, updatedAt: new Date() }).where(eq(songRequests.id, requestId));
-  await runBriefing(requestId);
+  return r && ACTIONS.answer.started.includes(r.status) ? "already" : "not_waiting";
 }
 
 /* ------------------------------- lyrics ---------------------------------- */

@@ -148,6 +148,75 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   const delivery = await page.request.get(`${BASE}${after.order.deliveryLink}`);
   assert.equal(delivery.status(), 200);
 
+  // 7. Thin stories are caught before the email, and the song's steps survive double clicks.
+  const thinQuiz = async (p, { fillStarters }) => {
+    const t = (name) => p.getByRole("button", { name, exact: false }).first().click();
+    await p.goto(`${BASE}/create`);
+    await p.evaluate(() => sessionStorage.clear());
+    await p.reload();
+    await t("Mom");
+    await p.getByLabel("Their name").fill("Rasheda");
+    await t("Continue");
+    await t("Birthday");
+    await t("Growing up");
+    await t("Continue");
+    await t("In the kitchen");
+    await t("Cooked my favourite");
+    await t("Continue");
+    // One short topic: "Last touches" offers two sentence starters instead of the open box.
+    await p.waitForSelector("text=Two quick ones for Rasheda's song");
+    const starters = p.locator(".ui-field input");
+    assert.equal(await starters.count(), 2, "two sentence starters");
+    if (fillStarters) {
+      await starters.nth(0).fill("the night the car broke down and we sang all the way home");
+      await starters.nth(1).fill("the porch at Grandma's, shelling peas every summer");
+      await shot("e2e-5-starters");
+      await t("Continue");
+      await p.waitForSelector("text=Here's what we heard about Rasheda");
+      assert.equal(await p.locator(".ui-beat__src:has-text('One more detail')").count(), 2, "starters are read back");
+    } else {
+      await t("Skip for now");
+      await p.waitForSelector("text=Here's what we heard about Rasheda");
+    }
+    await t("Yes, that's our story");
+    await t("Cry happy tears");
+    await t("Continue");
+    await t("Country");
+    await t("Female voice");
+    await t("Continue");
+    await p.locator('input[type="email"]').fill("tester@example.com");
+    await t("Write Rasheda's song");
+    await p.waitForURL(/\/r\//);
+    return p.url().split("/r/")[1];
+  };
+
+  // 7a. Starters filled: no questions after the email, straight to writing and recording.
+  const p2 = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  p2.on("pageerror", (e) => errors.push(e.message));
+  const full = await thinQuiz(p2, { fillStarters: true });
+  for (let i = 0; i < 40; i++) {
+    const st = (await (await p2.request.get(`${BASE}/api/requests/${full}`)).json()).status;
+    assert.notEqual(st, "needs_input", "no questions after the email when the starters were filled");
+    if (["generating", "processing", "preview_ready"].includes(st)) break;
+    await p2.waitForTimeout(500);
+  }
+
+  // 7b. Starters skipped on a very thin story: the questions screen is the fallback, and a
+  // double click on Continue moves on with no error.
+  const thin = await thinQuiz(p2, { fillStarters: false });
+  await p2.waitForSelector("text=One more thing about Rasheda", { timeout: 30000 });
+  for (const box of await p2.locator("textarea").all()) await box.fill("She hums Aretha while she cooks and burns the toast every time.");
+  await p2.getByRole("button", { name: "Continue" }).dblclick();
+  await p2.waitForSelector("text=One more thing about Rasheda", { state: "detached", timeout: 15000 });
+  assert.equal(await p2.locator(".ui-error").count(), 0, "no error after a double click");
+  const afterAnswers = (await (await p2.request.get(`${BASE}/api/requests/${thin}`)).json()).status;
+  assert.notEqual(afterAnswers, "needs_input");
+  // Sending the answers again is "already on it", not an error.
+  const again = await p2.request.post(`${BASE}/api/requests/${thin}/answers`, { data: { answers: { q: "again" } } });
+  assert.equal(again.status(), 200);
+  assert.equal((await again.json()).already, true);
+  await p2.context().close();
+
   assert.deepEqual(errors, [], `page errors: ${errors.join("; ")}`);
   console.log(`E2E passed for project ${id}`);
   await browser.close();

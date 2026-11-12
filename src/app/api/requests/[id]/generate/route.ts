@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { startGeneration } from "@/lib/pipeline/run";
 import { requireProject } from "@/lib/http/guard";
+import { checkAction, ALREADY_ON_IT } from "@/lib/pipeline/states";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (g instanceof NextResponse) return g;
   const parsed = Body.safeParse((await req.json().catch(() => ({}))) ?? {});
   const body = parsed.success ? parsed.data : {};
+  const check = checkAction("record", g.r.status);
+  if (!check.ok) return check.already ? NextResponse.json({ ok: true, already: true, message: ALREADY_ON_IT }) : NextResponse.json({ error: check.message }, { status: 409 });
   const result = await startGeneration(id, { draftId: body.draftId, trigger: body.more ? "extra" : undefined });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
   return NextResponse.json(result);

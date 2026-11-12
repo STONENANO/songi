@@ -438,17 +438,51 @@ function OpenTopic(q: Quiz, thread: string, fmt: { placeholder: string }): Scree
 
 /** The open box: the one thing to say, and anything else they want in the song. Both optional. */
 export function LastTouchesScreen(q: Quiz): ScreenParts {
-  const empty = !q.s.oneLine.trim() && !q.s.anythingElse.trim();
+  const [more, setMore] = useState(!!(q.s.oneLine.trim() || q.s.anythingElse.trim()));
+  const empty = !q.s.oneLine.trim() && !q.s.anythingElse.trim() && !Object.values(q.s.boosters).some((v) => v.trim());
+  const openFields = (
+    <>
+      <Field label={`The one thing you want the song to tell ${q.name}`} hint="We'll build the chorus around it.">
+        <TextArea value={q.s.oneLine} onChange={(e) => q.set("oneLine", e.target.value)} placeholder={q.f("I don't say it enough, but…")} maxLength={300} style={{ minHeight: 76 }} />
+      </Field>
+      <Field label="Anything else" hint="Memories, names, words to use, even lines you've written yourself.">
+        <TextArea value={q.s.anythingElse} onChange={(e) => q.set("anythingElse", e.target.value)} placeholder="Write as much or as little as you like…" maxLength={1500} style={{ minHeight: 110 }} />
+      </Field>
+    </>
+  );
+  // Thin story: two quick sentence starters first, so we have enough before the email.
+  if (q.thin) {
+    return {
+      body: (
+        <>
+          <ScreenTitle eyebrow="Last touches" title={`Two quick ones for ${q.name}'s song`} subtitle={`A couple more details make it unmistakably ${q.name}. A few words each is plenty.`} />
+          {q.boosterList.map((b) => (
+            <Field key={b.key} label={b.starter}>
+              <TextInput value={q.s.boosters[b.key] ?? ""} onChange={(e) => q.setBooster(b.key, e.target.value)} placeholder={b.placeholder} maxLength={300} />
+            </Field>
+          ))}
+          {more ? (
+            openFields
+          ) : (
+            <Button variant="text" onClick={() => setMore(true)}>
+              + A line for the chorus, or anything else
+            </Button>
+          )}
+          <Tip>{KEYBOARD_TIP}</Tip>
+        </>
+      ),
+      footer: (
+        <Button block onClick={() => { track("quiz:boosters", { filled: Object.values(q.s.boosters).filter((v) => v.trim()).length, stillThin: q.stillThin }); q.next(); }}>
+          {empty ? "Skip for now" : "Continue"}
+        </Button>
+      ),
+    };
+  }
   return {
     body: (
       <>
         <ScreenTitle eyebrow="Last touches · optional" title={`Anything else for ${q.name}'s song?`} subtitle="Know exactly what you want to say? Put it here. Not sure? Just continue." />
-        <Field label={`The one thing you want the song to tell ${q.name}`} hint="We'll build the chorus around it.">
-          <TextArea value={q.s.oneLine} onChange={(e) => q.set("oneLine", e.target.value)} placeholder={q.f("I don't say it enough, but…")} maxLength={300} style={{ minHeight: 76 }} />
-        </Field>
-        <Field label="Anything else" hint="Memories, names, words to use, even lines you've written yourself.">
-          <TextArea value={q.s.anythingElse} onChange={(e) => q.set("anythingElse", e.target.value)} placeholder="Write as much or as little as you like…" maxLength={1500} style={{ minHeight: 110 }} />
-        </Field>
+        {openFields}
         <Tip>{KEYBOARD_TIP}</Tip>
       </>
     ),

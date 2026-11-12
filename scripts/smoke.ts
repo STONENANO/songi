@@ -37,7 +37,7 @@ async function main() {
   await runBriefing(id);
   let v = await getRequestView(id);
   if (v?.status === "needs_input") {
-    await submitFollowUpAnswers(id, Object.fromEntries(v.followUpQuestions.map((q) => [q, "She always says 'we will figure it out' and then does."])));
+    if ((await submitFollowUpAnswers(id, Object.fromEntries(v.followUpQuestions.map((q) => [q, "She always says 'we will figure it out' and then does."])))) === "started") await runBriefing(id);
     v = await getRequestView(id);
   }
   console.log("brief:", v?.brief?.facts.map((f) => `${f.id} [P${f.priority}/${f.provenance}] ${f.text}`).join(" | "));
