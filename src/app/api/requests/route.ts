@@ -16,7 +16,7 @@ const Body = z.object({
   relationship: z.string().trim().min(1).max(40),
   occasion: z.string().trim().min(1).max(40),
   /** Story quiz: structured answers. Older clients and scripts send a plain `story`. */
-  answers: z.array(StoryAnswerSchema).max(6).optional().default([]),
+  answers: z.array(StoryAnswerSchema).max(8).optional().default([]),
   story: z.string().trim().max(4000).optional().default(""),
   oneLine: z.string().trim().max(300).optional().default(""),
   feeling: z.string().trim().max(40).optional().default(""),

@@ -47,7 +47,7 @@ export async function probeAnswer(input: ProbeInput): Promise<Probe> {
     `Answer: """${input.answer.trim()}"""`,
     input.isFollowUp ? `This answer is already a reply to a follow-up. followUp MUST be an empty string.` : "",
   ].join("\n");
-  const { output } = await structured({ operation: "probe", schema: ProbeSchema, system: SYSTEM, user, model: env.probeModel, effort: null, maxTokens: 400 });
+  const { output } = await structured({ operation: "probe", schema: ProbeSchema, system: SYSTEM, user, model: env.probeModel, effort: "low", maxTokens: 600 });
   if (input.isFollowUp) output.followUp = "";
   output.ingredients = output.ingredients.map((s) => s.trim()).filter(Boolean).slice(0, 4);
   return output;

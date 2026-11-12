@@ -26,26 +26,40 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   await tap("Mom");
   await page.getByLabel("Their name").fill("Linda");
   await tap("Continue");
-  await tap("Birthday");
-  await tap("Continue");
-  await tap("Let's do it");
+  await tap("Birthday"); // occasion tiles move on by themselves
   await tap("Growing up");
   await tap("Her favourite sayings");
   await tap("Continue");
-  // A detailed answer: no follow-up needed.
-  await page.locator("textarea").first().fill("Mom taught me to make pancakes every Sunday. She sings off-key in the car on every road trip. Her happy place is the lake house in Michigan.");
+  // Tap-first topic: answer tile, narrowing chip, one optional detail.
+  await tap("In the kitchen");
+  await tap("Cooked my favourite");
+  await page.getByPlaceholder("One detail you still remember").fill("She made pancakes every Sunday and sang off-key");
+  await shot("e2e-0-tap");
   await tap("Continue");
-  await page.waitForSelector("text=2 of 2", { timeout: 15000 });
-  // A thin answer: expect one dig-deeper follow-up, then answer it.
-  await page.locator("textarea").first().fill("She always says we got this.");
+  // Fill-in-the-blank story card: two suggestions and one typed answer.
+  await page.waitForSelector(".ui-madlib", { timeout: 15000 });
+  await tap("“we got this”");
+  await tap("things get hard");
+  await page.getByPlaceholder("Or type your own…").fill("like I can do anything");
+  await tap("Fill");
+  await page.waitForSelector("text=going in Linda's song");
+  await shot("e2e-0-blanks");
   await tap("Continue");
-  await page.waitForSelector('button:has-text("Add to the song")', { timeout: 15000 });
-  await shot("e2e-0-followup");
-  await page.locator("textarea").nth(1).fill("She says it every time I call her before a big exam.");
-  await tap("Add to the song");
-  await page.waitForSelector("text=hard to say out loud", { timeout: 15000 });
-  await page.locator("textarea").first().fill("You made every ordinary Sunday feel like a holiday.");
+  // The open box, then read back and confirm.
+  await page.waitForSelector("text=Anything else for Linda's song?");
+  await page.locator("textarea").nth(0).fill("You made every ordinary Sunday feel like a holiday.");
+  await page.locator("textarea").nth(1).fill("Her happy place is the lake house in Michigan.");
   await tap("Continue");
+  await page.waitForSelector("text=Here's what we heard about Linda");
+  const lines = await page.locator(".ui-beat .ui-beat__text").allInnerTexts();
+  assert.equal(lines.length, 3, "two topics and the open box are read back");
+  assert.ok(lines[1].includes("Linda always says “we got this”"), "story card reads back as a sentence");
+  await page.getByRole("button", { name: "✏️ Fix" }).first().click();
+  await page.locator("textarea").first().fill("Growing up, she cooked my favourite in the kitchen every Sunday, singing off-key.");
+  await tap("Save");
+  assert.ok(await page.isVisible("text=edited by you"), "edit is marked");
+  await shot("e2e-0-readback");
+  await tap("Yes, that's our story");
   await tap("Cry happy tears");
   await tap("Continue");
   await tap("Country");
@@ -69,6 +83,9 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   const html = await page.content();
   assert.ok(!html.includes("full.mp3") && !html.includes("file://"), "no storage keys in the page");
   const api = await (await page.request.get(`${BASE}/api/requests/${id}`)).json();
+  // The brief is built from the read-back lines, including the buyer's edit.
+  assert.ok(api.brief.facts.some((f) => /off-key/i.test(f.text)), "edited read-back line reached the brief");
+  assert.ok(!api.brief.facts.some((f) => /^Q:/.test(f.text)), "no question text leaked into facts");
   assert.ok(api.candidates.every((c) => c.downloadUrl === null), "no full URLs before payment");
   const range = await page.request.get(`${BASE}${srcs[0]}`, { headers: { Range: "bytes=0-1023" } });
   assert.equal(range.status(), 206);

@@ -4,13 +4,12 @@ import { Screen } from "@/components/ui";
 import { useQuiz, type Quiz } from "./use-quiz";
 import {
   FeelingScreen,
-  NameScreen,
   OccasionScreen,
-  OneLineScreen,
-  QuestionScreen,
+  LastTouchesScreen,
+  ReadBackScreen,
+  TopicScreen,
   SendScreen,
   SoundScreen,
-  StoryIntroScreen,
   ThreadsScreen,
   WhoScreen,
   type Genre,
@@ -35,26 +34,24 @@ function Step({ q, genres }: { q: Quiz; genres: Genre[] }) {
 
 function render(q: Quiz, genres: Genre[]): ScreenParts {
   const step = q.step;
-  if (step.startsWith("q:")) return QuestionScreen(q, step.slice(2));
+  if (step.startsWith("q:")) return TopicScreen(q, step.slice(2));
   switch (step) {
     case "who":
       return WhoScreen(q);
-    case "name":
-      return NameScreen(q);
     case "occasion":
       return OccasionScreen(q);
-    case "story_intro":
-      return StoryIntroScreen(q);
     case "threads":
       return ThreadsScreen(q);
-    case "one_line":
-      return OneLineScreen(q);
+    case "last_touches":
+      return LastTouchesScreen(q);
+    case "readback":
+      return ReadBackScreen(q);
     case "feeling":
       return FeelingScreen(q);
     case "sound":
       return SoundScreen(q, genres);
     case "send":
-      return SendScreen(q);
+      return SendScreen(q, genres);
     default:
       return WhoScreen(q);
   }

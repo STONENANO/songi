@@ -22,8 +22,19 @@ export function Screen(props: {
   /** Changing this replays the enter animation (use the step id). */
   animKey?: string | number;
 }) {
+  // The floating bar can grow (docked suggestions); pad the page by its real height so nothing hides behind it.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    const foot = root?.querySelector<HTMLElement>(".ui-footer");
+    const body = root?.querySelector<HTMLElement>(".ui-screen__body");
+    if (!foot || !body || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => body.style.setProperty("padding-bottom", `${foot.offsetHeight + 24}px`));
+    ro.observe(foot);
+    return () => ro.disconnect();
+  }, [props.footer]);
   return (
-    <div className="ui-screen">
+    <div className="ui-screen" ref={rootRef}>
       <header className="ui-screen__header">
         <div className="ui-screen__bar">
           {props.onBack ? (
@@ -260,9 +271,9 @@ export function IngredientsTray({ items, strength, label = "Song ingredients" }:
   );
 }
 
-export function DetailToLyric({ from, to }: { from: string; to: string }) {
+export function DetailToLyric({ from, to, animate }: { from: string; to: string; animate?: boolean }) {
   return (
-    <div className="ui-example">
+    <div className={cx("ui-example", animate && "ui-example--animate")}>
       <span className="ui-example__from">“{from}”</span>
       <span className="ui-example__arrow">↓ becomes</span>
       <span className="ui-example__to">♪ {to}</span>
@@ -295,6 +306,77 @@ export function ProgressBar({ value, label }: { value: number; label?: ReactNode
       <div className="ui-progress__track">
         <div className="ui-progress__fill" style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+/** Shows its content, then folds away after `ms` (or straight away when `closed`). */
+export function Collapse({ ms, closed, children }: { ms?: number; closed?: boolean; children: ReactNode }) {
+  const [shut, setShut] = useState(!!closed);
+  useEffect(() => {
+    if (closed || !ms) return;
+    const t = setTimeout(() => setShut(true), ms);
+    return () => clearTimeout(t);
+  }, [ms, closed]);
+  return (
+    <div className={cx("ui-collapse", (shut || closed) && "ui-collapse--closed")} aria-hidden={shut || closed}>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+/**
+ * The chosen tile, shrunk to one line with "Change". Used once a choice is made so the
+ * next thing to fill in moves up, above the fold.
+ */
+export function Picked({ emoji, label, sub, onChange }: { emoji?: string; label: ReactNode; sub?: ReactNode; onChange: () => void }) {
+  return (
+    <button type="button" className="ui-picked" onClick={onChange} aria-label="Change your answer">
+      {emoji && <span className="ui-tile__emoji" aria-hidden>{emoji}</span>}
+      <span className="ui-tile__text">
+        <span className="ui-tile__label">{label}</span>
+        {sub && <span className="ui-tile__sub">{sub}</span>}
+      </span>
+      <span className="ui-picked__change">Change</span>
+    </button>
+  );
+}
+
+/**
+ * Scroll so `el` sits above the floating bar (the bar covers the bottom of the screen).
+ * Use when focus moves to something that may be behind it.
+ */
+export function revealAboveBar(el: Element | null) {
+  if (!el || typeof window === "undefined") return;
+  const bar = document.querySelector(".ui-footer")?.getBoundingClientRect().top ?? window.innerHeight;
+  const r = el.getBoundingClientRect();
+  if (r.bottom > bar - 12) window.scrollBy({ top: r.bottom - bar + 24, behavior: "smooth" });
+  else if (r.top < 70) window.scrollBy({ top: r.top - 90, behavior: "smooth" });
+}
+
+/** A previous answer shown small, so the next question stays above the fold. */
+export function Quote({ children }: { children: ReactNode }) {
+  return <blockquote className="ui-quote">{children}</blockquote>;
+}
+
+export type RecapRow = { label: string; value: ReactNode; onEdit?: () => void };
+/** A short summary of what the buyer chose, each line editable. */
+export function Recap({ rows }: { rows: RecapRow[] }) {
+  return (
+    <div className="ui-recap">
+      {rows.map((r) => (
+        <div key={r.label} className="ui-recap__row">
+          <span className="ui-recap__label">{r.label}</span>
+          <span className="ui-recap__value">{r.value}</span>
+          {r.onEdit ? (
+            <button type="button" className="ui-recap__edit" onClick={r.onEdit}>
+              Edit
+            </button>
+          ) : (
+            <span />
+          )}
+        </div>
+      ))}
     </div>
   );
 }

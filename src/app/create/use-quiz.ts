@@ -5,23 +5,38 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FEELINGS, OCCASIONS, RELATIONSHIPS, fill, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
+import { FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, fill, inferRelationship, isGentleOccasion, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
+import { beatFor, formatFor, ingredientsFor, isAnswered, type TopicAnswer } from "@/lib/onboarding/story-formats";
 
-export type ThreadAnswer = { answer: string; followUp: string; followUpAnswer: string; probed: boolean };
+/** One line read back to the buyer before we write ("story beat"). */
+export type Beat = { key: string; topic: string; emoji: string; text: string; original: string; edited: boolean; gone: boolean };
+export const ANYTHING_ELSE = "anything_else";
 
 export type QuizState = {
   relationship: string;
+  /** Typed answer when "Someone else" is picked. */
+  relationshipOther: string;
+  /** Pronoun picked for "Someone else" ("" = guess from what they typed). */
+  pronounOther: "" | Pronoun;
   recipientName: string;
   pronunciation: string;
   occasion: string;
-  neededBy: string;
+  /** Typed answer when "Something else" is picked. */
+  occasionOther: string;
   threads: string[];
-  answers: Record<string, ThreadAnswer>;
-  ingredients: string[];
+  /** Answers per story topic: taps, blanks or free text (see story-formats.ts). */
+  topics: Record<string, TopicAnswer>;
   oneLine: string;
+  /** The open box: anything else they want in the song. */
+  anythingElse: string;
+  /** Read-back edits and removals, by beat key. */
+  beatEdits: Record<string, string>;
+  beatGone: string[];
   feeling: string;
   leaveOut: string;
   genreKey: string;
+  /** Typed sound description when the "Something else" genre is picked. */
+  customStyle: string;
   vocalGender: "m" | "f" | "any";
   email: string;
   phone: string;
@@ -31,17 +46,22 @@ export type QuizState = {
 
 const EMPTY: QuizState = {
   relationship: "",
+  relationshipOther: "",
+  pronounOther: "",
   recipientName: "",
   pronunciation: "",
   occasion: "",
-  neededBy: "",
+  occasionOther: "",
   threads: [],
-  answers: {},
-  ingredients: [],
+  topics: {},
   oneLine: "",
+  anythingElse: "",
+  beatEdits: {},
+  beatGone: [],
   feeling: "",
   leaveOut: "",
   genreKey: "",
+  customStyle: "",
   vocalGender: "any",
   email: "",
   phone: "",
@@ -50,21 +70,23 @@ const EMPTY: QuizState = {
 };
 
 export const MAX_THREADS = 3;
-export const MIN_THREADS = 2;
-export const MAX_PROBES = 3;
-export const MIN_ANSWER_CHARS = 15;
-const STORAGE_KEY = "story-quiz-v1";
+export const MIN_THREADS = 1;
+/** Shown as the recommendation; one is allowed so nobody gets stuck. */
+export const RECOMMENDED_THREADS = 2;
+const STORAGE_KEY = "story-quiz-v3";
+/** Genre tile for "describe it yourself"; recorded as pop plus the buyer's description. */
+export const CUSTOM_GENRE = "custom";
 
 export const CHAPTERS = ["Who it's for", "Their story", "The sound"] as const;
 
-export type StepId = string; // "who" | "name" | "occasion" | "story_intro" | "threads" | `q:${thread}` | "one_line" | "feeling" | "sound" | "send"
+export type StepId = string; // "who" | "occasion" | "threads" | `q:${thread}` | "last_touches" | "readback" | "feeling" | "sound" | "send"
 
 function stepsFor(threads: string[]): StepId[] {
-  return ["who", "name", "occasion", "story_intro", "threads", ...threads.map((t) => `q:${t}`), "one_line", "feeling", "sound", "send"];
+  return ["who", "occasion", "threads", ...threads.map((t) => `q:${t}`), "last_touches", "readback", "feeling", "sound", "send"];
 }
 
 function chapterOf(step: StepId): number {
-  if (step === "who" || step === "name" || step === "occasion") return 0;
+  if (step === "who" || step === "occasion") return 0;
   if (step === "sound" || step === "send") return 2;
   return 1;
 }
@@ -119,9 +141,16 @@ export function useQuiz() {
   }, [s, loaded]);
 
   const rel = RELATIONSHIPS.find((r) => r.value === s.relationship);
-  const pronoun: Pronoun = rel?.pronoun ?? "they";
-  const group: Group = rel?.group ?? "other";
+  const isOtherRel = s.relationship === OTHER;
+  const guessed = isOtherRel ? inferRelationship(s.relationshipOther) : null;
+  const pronoun: Pronoun = rel?.pronoun ?? (s.pronounOther || guessed?.pronoun || "they");
+  const group: Group = rel?.group ?? guessed?.group ?? "other";
+  /** What we send as the relationship: the tile, or what they typed. */
+  const relationshipValue = isOtherRel ? s.relationshipOther.trim().slice(0, 40) : s.relationship;
   const occasion = OCCASIONS.find((o) => o.value === s.occasion);
+  const isOtherOcc = s.occasion === OTHER;
+  const occasionValue = isOtherOcc ? s.occasionOther.trim().slice(0, 40) : s.occasion;
+  const gentle = !!occasion?.gentle || (isOtherOcc && isGentleOccasion(s.occasionOther));
   const name = s.recipientName.trim() || "them";
   const f = useCallback((template: string) => fill(template, name, pronoun), [name, pronoun]);
 
@@ -142,7 +171,7 @@ export function useQuiz() {
   useEffect(() => {
     if (!loaded || lastTracked.current === step) return;
     lastTracked.current = step;
-    track("quiz:step_view", { step: step.startsWith("q:") ? "question" : step, thread: step.startsWith("q:") ? step.slice(2) : "", index });
+    track("quiz:step_view", { step: step.startsWith("q:") ? `question_${formatFor(step.slice(2)).kind}` : step, thread: step.startsWith("q:") ? step.slice(2) : "", index });
   }, [step, index, loaded]);
 
   const set = useCallback(<K extends keyof QuizState>(k: K, v: QuizState[K]) => setS((p) => ({ ...p, [k]: v })), []);
@@ -151,14 +180,67 @@ export function useQuiz() {
     setS((p) => ({ ...p, stepId: id }));
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }, []);
+  /** Set when the buyer taps "Edit" on the recap: Continue goes straight back there. */
+  const returnTo = useRef<StepId | null>(null);
   const next = useCallback(() => {
+    if (returnTo.current) {
+      const r = returnTo.current;
+      returnTo.current = null;
+      return goTo(r);
+    }
     const n = steps[index + 1];
     if (n) goTo(n);
   }, [steps, index, goTo]);
+  /** Jump to a step to change one answer, then come back to the recap. */
+  const editFromRecap = useCallback(
+    (id: StepId) => {
+      returnTo.current = s.stepId;
+      goTo(id);
+    },
+    [s.stepId, goTo],
+  );
   const back = useCallback(() => {
     const p = steps[index - 1];
     if (p) goTo(p);
   }, [steps, index, goTo]);
+
+  /*
+   * Phone back button / swipe-back. The quiz lives on one URL, so without this
+   * "back" would leave the quiz. While past the first screen we keep one guard
+   * history entry; the browser's back pops it and we step back a question
+   * instead (and re-arm the guard). On the first screen back leaves as normal.
+   * Works after a refresh mid-quiz too, unlike one history entry per step.
+   */
+  const guardArmed = useRef(false);
+  const navRef = useRef({ index, steps });
+  navRef.current = { index, steps };
+  useEffect(() => {
+    if (!loaded || typeof window === "undefined") return;
+    if (index > 0 && !guardArmed.current) {
+      window.history.pushState({ quizGuard: true }, "");
+      guardArmed.current = true;
+    }
+  }, [index, loaded]);
+  useEffect(() => {
+    if (!loaded || typeof window === "undefined") return;
+    const onPop = () => {
+      if (!guardArmed.current) return; // nothing of ours to undo: let the browser leave
+      guardArmed.current = false;
+      const { index: i, steps: st } = navRef.current;
+      const prev = st[i - 1];
+      if (!prev) return;
+      track("quiz:browser_back", { from: st[i] ?? "" });
+      setS((p) => ({ ...p, stepId: prev }));
+      window.scrollTo({ top: 0 });
+      // Still mid-quiz: re-arm so the next back also steps back a question.
+      if (i - 1 > 0) {
+        window.history.pushState({ quizGuard: true }, "");
+        guardArmed.current = true;
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [loaded]);
 
   const toggleThread = useCallback((key: string) => {
     setS((p) => {
@@ -168,93 +250,88 @@ export function useQuiz() {
     });
   }, []);
 
-  const setAnswer = useCallback((thread: string, patch: Partial<ThreadAnswer>) => {
+  const setTopic = useCallback((thread: string, patch: Partial<TopicAnswer>) => {
     setS((p) => {
-      const prev = p.answers[thread] ?? { answer: "", followUp: "", followUpAnswer: "", probed: false };
-      return { ...p, answers: { ...p.answers, [thread]: { ...prev, ...patch } } };
+      const prev = p.topics[thread] ?? {};
+      // Changing an answer resets any read-back edit of it, so the buyer re-checks the new line.
+      const { [thread]: _drop, ...beatEdits } = p.beatEdits;
+      return { ...p, topics: { ...p.topics, [thread]: { ...prev, ...patch } }, beatEdits, beatGone: p.beatGone.filter((k) => k !== thread) };
     });
   }, []);
 
-  const addIngredients = useCallback((items: string[]) => {
-    setS((p) => {
-      const seen = new Set(p.ingredients.map((i) => i.toLowerCase()));
-      const add = items.map((i) => i.trim()).filter((i) => i && !seen.has(i.toLowerCase()));
-      return add.length ? { ...p, ingredients: [...p.ingredients, ...add].slice(-12) } : p;
-    });
-  }, []);
+  const answered = s.threads.filter((t) => isAnswered(formatFor(t), s.topics[t]));
 
-  const answered = s.threads.filter((t) => (s.answers[t]?.answer ?? "").trim().length >= MIN_ANSWER_CHARS);
-  const probesUsed = Object.values(s.answers).filter((a) => a.followUp).length;
+  /** The story read back to the buyer: one line per answered topic, plus the open box. */
+  const beats: Beat[] = useMemo(() => {
+    const list: Beat[] = [];
+    for (const key of s.threads) {
+      const t = threadByKey(key);
+      const fmt = formatFor(key);
+      const a = s.topics[key];
+      if (!t || !isAnswered(fmt, a)) continue;
+      const original = beatFor(fmt, fill(t.label, name, pronoun), a!, name, pronoun);
+      const edit = s.beatEdits[key];
+      list.push({ key, topic: fill(t.label, name, pronoun), emoji: t.emoji, text: edit ?? original, original, edited: edit !== undefined, gone: s.beatGone.includes(key) });
+    }
+    if (s.anythingElse.trim()) {
+      const edit = s.beatEdits[ANYTHING_ELSE];
+      list.push({ key: ANYTHING_ELSE, topic: "Anything else", emoji: "📝", text: edit ?? s.anythingElse.trim(), original: s.anythingElse.trim(), edited: edit !== undefined, gone: s.beatGone.includes(ANYTHING_ELSE) });
+    }
+    return list;
+  }, [s.threads, s.topics, s.beatEdits, s.beatGone, s.anythingElse, name, pronoun]);
+
+  const editBeat = useCallback((key: string, text: string) => setS((p) => ({ ...p, beatEdits: { ...p.beatEdits, [key]: text } })), []);
+  const toggleBeat = useCallback(
+    (key: string) => setS((p) => ({ ...p, beatGone: p.beatGone.includes(key) ? p.beatGone.filter((k) => k !== key) : [...p.beatGone, key] })),
+    [],
+  );
+
+  /** Chips for the ingredients tray, from everything answered so far. */
+  const ingredients = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const key of s.threads)
+      for (const i of ingredientsFor(formatFor(key), s.topics[key], name, pronoun)) {
+        if (!seen.has(i.toLowerCase())) {
+          seen.add(i.toLowerCase());
+          out.push(i);
+        }
+      }
+    return out.slice(-12);
+  }, [s.threads, s.topics, name, pronoun]);
+
   /** 0..5: how much real material we have. Drives the strength meter. */
   const strength = Math.min(
     5,
-    answered.length + Math.floor(s.ingredients.length / 3) + (s.oneLine.trim().length > 10 ? 1 : 0) + (Object.values(s.answers).some((a) => a.followUpAnswer.trim()) ? 1 : 0),
-  );
-
-  /** Ask for a dig-deeper follow-up. Resolves to null on timeout or error; the quiz never waits long. */
-  const probe = useCallback(
-    async (thread: string, question: string, answer: string, isFollowUp: boolean, timeoutMs: number) => {
-      const t = threadByKey(thread);
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-      try {
-        const res = await fetch("/api/probe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: ctrl.signal,
-          body: JSON.stringify({
-            recipientName: s.recipientName,
-            relationship: s.relationship,
-            pronoun,
-            question,
-            answer,
-            isFollowUp,
-            fallbackDig: t ? f(t.dig) : "",
-          }),
-        });
-        if (!res.ok) return null;
-        return (await res.json()) as { reaction: string; followUp: string; ingredients: string[] };
-      } catch {
-        return null;
-      } finally {
-        clearTimeout(timer);
-      }
-    },
-    [s.recipientName, s.relationship, pronoun, f],
+    answered.length + Math.floor(ingredients.length / 3) + (s.oneLine.trim().length > 10 ? 1 : 0) + (s.anythingElse.trim().length > 20 ? 1 : 0),
   );
 
   const submit = useCallback(async () => {
     setBusy(true);
     setError(null);
     const feeling = FEELINGS.find((x) => x.value === s.feeling);
-    const answers = s.threads
-      .map((key) => {
-        const t = threadByKey(key);
-        const a = s.answers[key];
-        if (!t || !a?.answer.trim()) return null;
-        return {
-          thread: key,
-          question: f(t.question),
-          answer: a.answer,
-          followUp: a.followUp,
-          followUpAnswer: a.followUpAnswer,
-        };
-      })
-      .filter((x): x is NonNullable<typeof x> => !!x);
+    // The songwriter gets exactly the lines the buyer confirmed, in their words.
+    const answers = beats
+      .filter((b) => !b.gone && b.text.trim())
+      .map((b) => ({
+        thread: b.key,
+        question: b.key === ANYTHING_ELSE ? "Anything else to put in the song" : f(threadByKey(b.key)?.question ?? b.topic),
+        answer: b.text.trim(),
+      }));
     const res = await fetch("/api/requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         recipientName: s.recipientName,
         pronunciation: s.pronunciation,
-        relationship: s.relationship,
-        occasion: s.occasion,
-        neededBy: s.neededBy,
+        relationship: relationshipValue,
+        occasion: occasionValue,
         answers,
         oneLine: s.oneLine,
         feeling: s.feeling,
         leaveOut: s.leaveOut,
-        genreKey: s.genreKey,
+        genreKey: s.genreKey === CUSTOM_GENRE ? "pop" : s.genreKey,
+        customStyle: s.genreKey === CUSTOM_GENRE ? s.customStyle : "",
         vocalGender: s.vocalGender,
         mood: feeling?.mood ?? "",
         email: s.email,
@@ -269,14 +346,18 @@ export function useQuiz() {
       return;
     }
     const id = (json as { id: string }).id;
-    track("quiz:submitted", { threads: s.threads.length, answered: answered.length, ingredients: s.ingredients.length, strength }, id);
+    track(
+      "quiz:submitted",
+      { threads: s.threads.length, answered: answered.length, ingredients: ingredients.length, strength, beatsEdited: beats.filter((b) => b.edited).length, beatsLeftOut: beats.filter((b) => b.gone).length, openBox: !!s.anythingElse.trim() },
+      id,
+    );
     try {
       sessionStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
     }
     router.push(`/r/${id}`);
-  }, [s, f, answered.length, strength, router]);
+  }, [s, f, beats, answered.length, ingredients.length, strength, relationshipValue, occasionValue, router]);
 
   return {
     s,
@@ -290,17 +371,22 @@ export function useQuiz() {
     next,
     back: index > 0 ? back : undefined,
     goTo,
+    editFromRecap,
     toggleThread,
-    setAnswer,
-    addIngredients,
-    probe,
-    probesUsed,
+    setTopic,
+    beats,
+    editBeat,
+    toggleBeat,
+    ingredients,
     answered,
     strength,
     rel,
+    isOtherRel,
     group,
     pronoun,
     occasion,
+    isOtherOcc,
+    gentle,
     name,
     f,
     submit,
