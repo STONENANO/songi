@@ -12,6 +12,10 @@ export const env = {
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   llmModel: process.env.LLM_MODEL ?? "claude-opus-5-5",
+  /** Fast model for the in-quiz follow-up questions. Latency matters more than depth here. */
+  probeModel: process.env.PROBE_MODEL ?? "claude-haiku-5-5",
+  /** Code that unlocks the full song without checkout (for creators filming reaction videos). Empty disables it. */
+  creatorUnlockCode: process.env.CREATOR_UNLOCK_CODE ?? "",
   get mockLlm(): boolean {
     return flag(process.env.MOCK_LLM) || !this.anthropicApiKey;
   },
