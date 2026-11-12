@@ -201,20 +201,25 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
     await p2.waitForTimeout(500);
   }
 
-  // 7b. Starters skipped on a very thin story: the questions screen is the fallback, and a
-  // double click on Continue moves on with no error.
+  // 7b. Starters skipped on a very thin story: the song still never waits on the buyer.
   const thin = await thinQuiz(p2, { fillStarters: false });
-  await p2.waitForSelector("text=One more thing about Rasheda", { timeout: 30000 });
-  for (const box of await p2.locator("textarea").all()) await box.fill("She hums Aretha while she cooks and burns the toast every time.");
-  await p2.getByRole("button", { name: "Continue" }).dblclick();
-  await p2.waitForSelector("text=One more thing about Rasheda", { state: "detached", timeout: 15000 });
-  assert.equal(await p2.locator(".ui-error").count(), 0, "no error after a double click");
-  const afterAnswers = (await (await p2.request.get(`${BASE}/api/requests/${thin}`)).json()).status;
-  assert.notEqual(afterAnswers, "needs_input");
-  // Sending the answers again is "already on it", not an error.
-  const again = await p2.request.post(`${BASE}/api/requests/${thin}/answers`, { data: { answers: { q: "again" } } });
-  assert.equal(again.status(), 200);
-  assert.equal((await again.json()).already, true);
+  let st = "";
+  for (let i = 0; i < 60 && st !== "preview_ready"; i++) {
+    st = (await (await p2.request.get(`${BASE}/api/requests/${thin}`)).json()).status;
+    assert.notEqual(st, "needs_input", "no questions after the email, ever");
+    await p2.waitForTimeout(500);
+  }
+  assert.equal(st, "preview_ready", "a thin story is written and recorded");
+  await p2.waitForSelector("text=Rasheda's Song", { timeout: 30000 });
+
+  // 7c. Two "new lyrics" requests at once (double click, two tabs): one starts, the other is
+  // "already on it". Neither is an error, and the page shows no error.
+  const [r1, r2] = await Promise.all([1, 2].map(() => p2.request.post(`${BASE}/api/requests/${thin}/lyrics`, { data: { action: "regenerate" } })));
+  assert.deepEqual([r1.status(), r2.status()], [200, 200]);
+  const bodies = [await r1.json(), await r2.json()];
+  assert.equal(bodies.filter((x) => x.already).length, 1, "exactly one of the two started the rewrite");
+  await p2.waitForSelector("text=Rasheda", { timeout: 30000 });
+  assert.equal(await p2.locator(".ui-error").count(), 0, "no error on the page");
   await p2.context().close();
 
   assert.deepEqual(errors, [], `page errors: ${errors.join("; ")}`);

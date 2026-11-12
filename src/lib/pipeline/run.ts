@@ -2,7 +2,8 @@
  * The song pipeline, part 1: briefing and lyrics. Every exported function is
  * one state transition and is safe to call twice.
  *
- *  draft -> briefing -> (needs_input) -> writing_lyrics -> lyrics_ready
+ *  draft -> briefing -> writing_lyrics -> lyrics_ready
+ *  (needs_input is legacy: songs from before the quiz caught thin stories may still be waiting)
  *        -> generating -> processing -> preview_ready -> purchased | failed
  *
  * Generation and candidates live in generation.ts; the customer view in view.ts.
@@ -80,9 +81,13 @@ export async function runBriefing(requestId: string): Promise<void> {
       contradictions: brief.contradictions.length,
     });
 
+    // After the email the song never waits on the buyer. A thin story is written with what
+    // it has; the questions the brief would have asked are kept for the admin view only.
+    // (The quiz offers sentence starters before the email to make this rare.)
     if (brief.followUpQuestions.length && !r.followUpAnswers) {
-      await setStatus(requestId, "needs_input", { followUpQuestions: brief.followUpQuestions });
-      return;
+      const db = await getDb();
+      await db.update(songRequests).set({ followUpQuestions: brief.followUpQuestions }).where(eq(songRequests.id, requestId));
+      await logEvent(requestId, "brief:thin", { questions: brief.followUpQuestions.length });
     }
     await runLyrics(requestId, { source: "generated" });
     await maybeAutoRecord(requestId);

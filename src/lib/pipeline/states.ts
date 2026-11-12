@@ -11,6 +11,7 @@ export type BuyerScreen = "writing" | "questions" | "review" | "recording" | "ve
 export const STEPS: Record<RequestStatus, { screen: BuyerScreen; /** The server is working: keep checking. */ working: boolean }> = {
   draft: { screen: "writing", working: true },
   briefing: { screen: "writing", working: true },
+  // Legacy only: new songs never stop to ask (thin stories are caught in the quiz).
   needs_input: { screen: "questions", working: false },
   writing_lyrics: { screen: "writing", working: true },
   // Story-quiz songs go straight on to recording; the page decides between "writing" and "review".
