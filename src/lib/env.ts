@@ -31,6 +31,10 @@ export const env = {
   get llmModel(): string {
     return process.env.LLM_MODEL ?? "claude-opus-5-5";
   },
+  /** Fast model for the in-quiz follow-up questions. Latency matters more than depth here. */
+  get probeModel(): string {
+    return process.env.PROBE_MODEL ?? "claude-haiku-5-5";
+  },
   get mockLlm(): boolean {
     return flag(process.env.MOCK_LLM) || !this.anthropicApiKey;
   },

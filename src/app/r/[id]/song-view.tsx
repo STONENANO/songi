@@ -1,342 +1,322 @@
 "use client";
-
-import { useCallback, useEffect, useRef, useState } from "react";
+/**
+ * The song page: writing → recording (the wait, our sales window) → versions
+ * (pick one, buy, download, feedback). Layout only; behaviour is in use-song.ts.
+ * Visuals come from components/ui and app/theme.css.
+ */
+import { useEffect, useMemo, useState } from "react";
+import {
+  AudioPlayer,
+  Banner,
+  Button,
+  Card,
+  Chip,
+  Chips,
+  Checklist,
+  ErrorText,
+  Field,
+  Lyrics,
+  Note,
+  ProgressBar,
+  Screen,
+  ScreenTitle,
+  Stages,
+  StudioCard,
+  TextArea,
+  TrustRow,
+  WaitVideo,
+  type StageState,
+} from "@/components/ui";
+import { BRAND } from "@/lib/brand";
+import { buildLyricSections, chorusOf, storyLineCount } from "@/lib/onboarding/lyrics-view";
+import { useSong, type Song } from "./use-song";
 import type { RequestView } from "@/lib/pipeline/view";
 
-const WORKING = new Set(["draft", "briefing", "writing_lyrics", "generating", "processing"]);
+function names(view: RequestView) {
+  const name = view.recipientName || view.brief?.recipient.name || "them";
+  const rel = view.relationship.replace(/_/g, " ");
+  return { name, rel, giver: view.giverName };
+}
 
-const STATUS_COPY: Record<string, string> = {
-  draft: "Getting started…",
-  briefing: "Reading your story and pulling out the details that matter…",
-  needs_input: "One or two quick questions",
-  writing_lyrics: "Writing the lyrics and checking every line against your story…",
-  lyrics_ready: "Your lyrics are ready",
-  generating: "Recording your versions. This usually takes two to four minutes.",
-  processing: "Mastering and checking each recording…",
-  preview_ready: "Your song is ready to hear",
-  purchased: "Your song is yours",
-  failed: "Something went wrong",
-};
+/** Seconds since `since`, ticking every second. */
+function useElapsed(since: string | Date | null | undefined) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (!since) return 0;
+  return Math.max(0, (now - new Date(since).getTime()) / 1000);
+}
 
-function fmt(sec: number | null) {
-  if (!sec && sec !== 0) return "";
-  return `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`;
+function useSections(view: RequestView) {
+  const draft = view.draft;
+  return useMemo(() => (draft ? buildLyricSections(draft.displayLyrics, draft.storyLines ?? []) : []), [draft]);
 }
 
 export default function SongView({ id }: { id: string }) {
-  const [view, setView] = useState<RequestView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState("");
-  const played = useRef(new Set<string>());
+  const song = useSong(id);
+  const { view, phase } = song;
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/requests/${id}${typeof window !== "undefined" ? window.location.search : ""}`, { cache: "no-store" });
-    if (!res.ok) {
-      setError(res.status === 403 ? "This song belongs to a different browser. Open it from the device you created it on." : "This song request could not be found.");
-      return;
-    }
-    setView(await res.json());
-  }, [id]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const pendingOrder = view?.order?.status === "pending";
-  useEffect(() => {
-    if (!view || !(WORKING.has(view.status) || pendingOrder)) return;
-    const t = setInterval(load, pendingOrder ? 4000 : 3000);
-    return () => clearInterval(t);
-  }, [view, load, pendingOrder]);
-
-  async function post(path: string, body: unknown): Promise<Record<string, unknown> | null> {
-    setBusy(true);
-    setError(null);
-    const res = await fetch(`/api/requests/${id}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) setError((json.error as string) ?? "Request failed");
-    setBusy(false);
-    await load();
-    return res.ok ? json : null;
+  if (phase === "missing" || phase === "denied") {
+    return (
+      <Screen>
+        <ScreenTitle
+          title={phase === "denied" ? "This song was made on another device." : "We couldn't find this song."}
+          subtitle={phase === "denied" ? "Open it from the browser you created it in, or use the link from your email." : "Check the link in your email, or start a new one."}
+        />
+        <Button href="/create">Start a song</Button>
+      </Screen>
+    );
   }
-
-  function track(type: "preview_play" | "preview_complete", versionId: string, position: number) {
-    const key = `${type}:${versionId}`;
-    if (played.current.has(key)) return;
-    played.current.add(key);
-    fetch(`/api/requests/${id}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, versionId, position }) }).catch(() => {});
+  if (!view) {
+    return (
+      <Screen>
+        <Note>Loading…</Note>
+      </Screen>
+    );
   }
-
-  async function buy(versionId: string) {
-    const j = await post("/checkout", { versionId });
-    if (j?.checkoutUrl) window.location.href = j.checkoutUrl as string;
-  }
-
-  if (error && !view) return <p className="err">{error}</p>;
-  if (!view) return (
-    <p>
-      <span className="spinner" />
-      Loading…
-    </p>
-  );
-
-  const draft = view.draft;
-  const working = WORKING.has(view.status);
-  const showGallery = (view.status === "preview_ready" || view.status === "purchased") && view.candidates.length > 0;
-  const selected = view.candidates.find((c) => c.selected) ?? null;
-  const paid = view.order?.status === "paid";
 
   return (
-    <div>
+    <Screen animKey={phase}>
       {view.mock.banner && (view.mock.llm || view.mock.kie || view.mock.shopify) && (
-        <div className="banner">
-          Test mode:{" "}
-          {[view.mock.llm && "placeholder lyrics", view.mock.kie && "test-tone audio", view.mock.shopify && "test checkout"].filter(Boolean).join(", ")}. Add API keys in .env for real songs and payments.
-        </div>
+        <Banner>
+          Test mode: {[view.mock.llm && "placeholder lyrics", view.mock.kie && "test-tone audio", view.mock.shopify && "test checkout"].filter(Boolean).join(", ")}. Add API keys in .env for real songs and payments.
+        </Banner>
       )}
-      <p className="muted" style={{ margin: 0 }}>
-        {view.genreLabel} · for {view.recipientName || view.relationship} · {view.occasion.replace(/_/g, " ")}
-      </p>
-      <h1>
-        {working && <span className="spinner" />}
-        {STATUS_COPY[view.status] ?? view.status}
-      </h1>
+      {phase === "writing" && <Writing view={view} />}
+      {phase === "recording" && <Recording view={view} />}
+      {phase === "versions" && <Versions view={view} song={song} />}
+      {phase === "review" && <Review view={view} song={song} />}
+      {phase === "needs_input" && <NeedsInput view={view} song={song} />}
+      {phase === "failed" && <Failed view={view} song={song} />}
+      {song.error && <ErrorText>{song.error}</ErrorText>}
+    </Screen>
+  );
+}
 
-      {view.status === "failed" && (
-        <div className="card">
-          <p className="err" style={{ marginTop: 0 }}>{view.lastError}</p>
-          {draft?.singable && view.generation.canRequestMore && (
-            <button className="btn" disabled={busy} onClick={() => post("/generate", {})}>
-              Try recording again
-            </button>
-          )}
-        </div>
-      )}
+/* --------------------------------- writing --------------------------------- */
 
-      {view.status === "needs_input" && (
-        <div className="card">
-          <p className="muted">Your story is a great start. A couple of specific details will make the song unmistakably about them.</p>
-          {view.followUpQuestions.map((q, i) => (
-            <div key={q}>
-              <label htmlFor={`fq-${i}`}>{q}</label>
-              <textarea id={`fq-${i}`} style={{ minHeight: 80 }} value={answers[q] ?? ""} onChange={(e) => setAnswers((a) => ({ ...a, [q]: e.target.value }))} />
-            </div>
-          ))}
-          <div className="row" style={{ marginTop: 16 }}>
-            <button className="btn" disabled={busy || view.followUpQuestions.some((q) => !(answers[q] ?? "").trim())} onClick={() => post("/answers", { answers })}>
-              Continue
-            </button>
-            <button className="btn secondary" disabled={busy} onClick={() => post("/answers", { answers: Object.fromEntries(view.followUpQuestions.map((q) => [q, "(skipped)"])) })}>
-              Skip
-            </button>
-          </div>
-        </div>
-      )}
-
-      {(view.status === "generating" || view.status === "processing") && (
-        <div className="card">
-          <p style={{ margin: 0 }}>
-            Recording {view.generation.desired} versions of your song in different styles. {view.generation.usable > 0 ? `${view.generation.usable} ready so far.` : ""}
-          </p>
-          <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>Every recording is checked before you hear it. You can leave this page open or come back later.</p>
-        </div>
-      )}
-
-      {showGallery && (
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>{view.candidates.length > 1 ? `${view.candidates.length} versions. Pick the one that gives you chills.` : "Here is your version."}</h2>
-          <div className="grid2" role="radiogroup" aria-label="Song versions">
-            {view.candidates.map((c) => (
-              <div key={c.id} className={`version ${c.selected ? "on" : ""}`}>
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                  <b>{c.label}</b>
-                  {c.runtimeSec ? <span className="tag">{fmt(c.runtimeSec)}</span> : null}
-                </div>
-                {c.description && <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>{c.description}</p>}
-                {c.purchaseStatus === "paid" && c.downloadUrl ? (
-                  <audio controls preload="metadata" src={c.downloadUrl} />
-                ) : c.previewUrl ? (
-                  <audio
-                    controls
-                    preload="none"
-                    src={c.previewUrl}
-                    aria-label={`${c.label} preview`}
-                    onPlay={() => track("preview_play", c.id, view.candidates.indexOf(c))}
-                    onEnded={() => track("preview_complete", c.id, view.candidates.indexOf(c))}
-                  />
-                ) : null}
-                {!paid && (
-                  <button
-                    role="radio"
-                    aria-checked={c.selected}
-                    className={`btn ${c.selected ? "" : "secondary"}`}
-                    style={{ marginTop: 10, width: "100%" }}
-                    disabled={busy}
-                    onClick={() => post("/select", { versionId: c.id })}
-                  >
-                    {c.selected ? "Selected" : "Choose this version"}
-                  </button>
-                )}
-                {c.purchaseStatus === "paid" && <span className="tag ok" style={{ marginTop: 8, display: "inline-block" }}>Purchased</span>}
-              </div>
+function Writing({ view }: { view: RequestView }) {
+  const { name } = names(view);
+  const t = useElapsed(view.createdAt);
+  const s = view.status;
+  const briefDone = s !== "draft" && s !== "briefing";
+  const lyricsDone = !!view.draft;
+  const state = (done: boolean, active: boolean): StageState => (done ? "done" : active ? "active" : "todo");
+  const stages = [
+    { label: "Reading your story", state: state(briefDone || t > 6, true) },
+    { label: "Picking the details worth singing", state: state(briefDone, t > 6 || briefDone) },
+    { label: `Writing the chorus around “${name}”`, state: state(lyricsDone || (briefDone && t > 40), briefDone) },
+    { label: "Checking every line against your story", state: state(lyricsDone, briefDone && t > 40) },
+  ];
+  const facts = view.brief?.facts ?? [];
+  return (
+    <>
+      <ScreenTitle eyebrow="Step 1 of 2" title={`Writing ${name}'s song`} subtitle="This takes about a minute. Then we record it." />
+      <Card>
+        <Stages items={stages} />
+      </Card>
+      {facts.length > 0 && (
+        <Card tone="muted" title="What we're singing about">
+          <Chips>
+            {facts.slice(0, 8).map((f) => (
+              <span key={f.id} className="ui-tray__item">{f.text}</span>
             ))}
-          </div>
-          {view.rejectedCount > 0 && (
-            <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>
-              {view.rejectedCount} recording{view.rejectedCount > 1 ? "s" : ""} did not pass our quality checks and {view.rejectedCount > 1 ? "were" : "was"} discarded.
-            </p>
-          )}
+          </Chips>
+        </Card>
+      )}
+    </>
+  );
+}
 
-          {!paid && (
-            <div className="row" style={{ marginTop: 16 }}>
-              <button className="btn" disabled={busy || !selected || pendingOrder} onClick={() => selected && buy(selected.id)}>
-                {selected ? `Get the full song · ${view.priceLabel}` : "Choose a version first"}
-              </button>
-              {view.generation.canRequestMore && (
-                <button className="btn secondary" disabled={busy} onClick={() => post("/generate", { more: true })}>
-                  Hear another take
-                </button>
-              )}
-            </div>
-          )}
-          {pendingOrder && (
-            <p className="muted" style={{ marginBottom: 0 }}>
-              <span className="spinner" />
-              Waiting for payment confirmation. This page updates on its own once your payment is confirmed.
-            </p>
-          )}
-          {view.order?.status === "paid_unfulfilled" && <p className="err">Your payment went through but we couldn't prepare the file. Our team has been notified and will deliver it.</p>}
-          {paid && (
-            <div style={{ marginTop: 12 }}>
-              {view.candidates
-                .filter((c) => c.purchaseStatus === "paid" && c.downloadUrl)
-                .map((c) => (
-                  <a key={c.id} className="btn" href={c.downloadUrl!} style={{ textDecoration: "none", marginRight: 8 }}>
-                    Download MP3
-                  </a>
-                ))}
-              {view.order?.deliveryLink && (
-                <p className="muted" style={{ fontSize: 13 }}>
-                  Your permanent link: <a href={view.order.deliveryLink}>{typeof window !== "undefined" ? window.location.origin : ""}{view.order.deliveryLink}</a>
-                </p>
-              )}
-            </div>
-          )}
+/* -------------------------------- recording -------------------------------- */
+
+function recordProgress(view: RequestView, elapsed: number): { value: number; label: string } {
+  const { name } = names(view);
+  const g = view.generation;
+  const readyShare = g.desired ? Math.min(1, g.usable / g.desired) : 0;
+  if (view.status === "processing") return { value: Math.max(0.9, 0.9 + 0.09 * readyShare), label: "Checking each recording" };
+  const v = Math.max(Math.min(0.9, elapsed / BRAND.estRecordSeconds), 0.9 * readyShare);
+  const label = v < 0.2 ? "Laying down the music" : v < 0.5 ? "Recording vocals" : v < 0.75 ? `Singing ${name}'s name in the chorus` : "Mixing and mastering";
+  return { value: v, label };
+}
+
+function Recording({ view }: { view: RequestView }) {
+  const { name } = names(view);
+  const elapsed = useElapsed(view.statusSince);
+  const progress = recordProgress(view, elapsed);
+  const sections = useSections(view);
+  const fromStory = storyLineCount(sections);
+  const messages = useMemo(() => {
+    const facts = (view.brief?.facts ?? []).filter((f) => f.priority <= 2).map((f) => f.text);
+    return [
+      `Recording ${name}'s song`,
+      ...facts.slice(0, 3).map((f) => `Singing about “${f.length > 60 ? f.slice(0, 57) + "…" : f}”`),
+      `Putting ${name}'s name in the chorus`,
+      `Laying down the ${view.genreLabel} groove`,
+    ];
+  }, [view.brief, view.genreLabel, name]);
+
+  return (
+    <>
+      <ScreenTitle eyebrow="Step 2 of 2 · Recording now" title={`${name}'s song is being recorded`} />
+      {BRAND.waitVideoUrl ? <WaitVideo src={BRAND.waitVideoUrl} /> : <StudioCard messages={messages} sub={`${view.genreLabel} · written for ${name}`} />}
+      <div className="ui-mt ui-stack">
+        <ProgressBar value={progress.value} label={progress.label} />
+        <p className="ui-pointer">👇 Your free preview will appear right here</p>
+      </div>
+      {view.draft && (
+        <Card title={`While you wait, here's what we wrote for ${name}`}>
+          <Lyrics sections={sections} reveal legend={fromStory > 0 ? `${fromStory} line${fromStory === 1 ? "" : "s"} came straight from your story. Tap one to see.` : undefined} />
+          <Note>Want to change a line? You can, free, after you hear it.</Note>
+        </Card>
+      )}
+      <Card tone="muted" title="What happens next">
+        <Checklist
+          items={[
+            `We're recording ${view.generation.desired > 1 ? `${view.generation.desired} versions in different styles` : "your song"}, and checking each one before you hear it`,
+            "Your free previews play right here in a few minutes",
+            "Change any line and we'll re-record it",
+            `Pick your favourite and get the full song for ${name}`,
+          ]}
+        />
+      </Card>
+    </>
+  );
+}
+
+/* --------------------------------- versions --------------------------------- */
+
+function Versions({ view, song }: { view: RequestView; song: Song }) {
+  const { name, rel, giver } = names(view);
+  const sections = useSections(view);
+  const chorus = chorusOf(sections);
+  const [allLyrics, setAllLyrics] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const selected = view.candidates.find((c) => c.selected) ?? null;
+  const paid = view.order?.status === "paid";
+  const many = view.candidates.length > 1;
+
+  return (
+    <>
+      <ScreenTitle
+        eyebrow={paid ? "It's yours" : "Your free preview"}
+        title={`${name}'s Song`}
+        subtitle={`An original ${view.genreLabel} song written for ${name}, your ${rel}${giver ? `, from ${giver}` : ""}. Headphones in if you have them.`}
+      />
+      {!paid && many && <Note>{view.candidates.length} versions. Pick the one that gives you chills.</Note>}
+
+      <div className="ui-stack ui-mt" role="radiogroup" aria-label="Song versions">
+        {view.candidates.map((c, i) => (
+          <div key={c.id} className="ui-stack">
+            {c.purchaseStatus === "paid" && c.downloadUrl ? (
+              <AudioPlayer src={c.downloadUrl} title={`${c.label} · full song`} seed={i + 1} />
+            ) : c.previewUrl ? (
+              <AudioPlayer
+                src={c.previewUrl}
+                title={c.label}
+                seed={i + 1}
+                onPlay={() => song.trackPlay("preview_play", c.id, i)}
+                onEnded={() => song.trackPlay("preview_complete", c.id, i)}
+              />
+            ) : null}
+            {c.description && <Note>{c.description}</Note>}
+            {!paid && many && (
+              <Button variant={c.selected ? "primary" : "secondary"} disabled={song.busy} onClick={() => void song.select(c.id)}>
+                {c.selected ? "✓ Selected" : "Choose this version"}
+              </Button>
+            )}
+            {c.purchaseStatus === "paid" && c.downloadUrl && (
+              <Button variant="text" href={c.downloadUrl}>
+                Download MP3
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {!paid && (
+        <div className="ui-mt ui-stack">
+          <Button block disabled={song.busy || song.pendingOrder || (many && !selected)} onClick={() => void song.buy((selected ?? view.candidates[0]).id)}>
+            {many && !selected ? "Choose a version first" : `🔓 Get ${name}'s full song · ${view.priceLabel}`}
+          </Button>
+          <TrustRow items={["The full song, every verse", "MP3 download", "Change any line"]} />
+          {song.pendingOrder && <Note>Waiting for payment confirmation. This page updates on its own.</Note>}
+          {view.order?.status === "paid_unfulfilled" && <ErrorText>Your payment went through but we couldn&apos;t prepare the file. We&apos;ve been notified and will deliver it.</ErrorText>}
+        </div>
+      )}
+      {paid && view.order?.deliveryLink && (
+        <Card tone="muted" title="Keep this link">
+          <Note>
+            Your permanent link to {name}&apos;s song: <a href={view.order.deliveryLink}>{typeof window !== "undefined" ? window.location.origin : ""}{view.order.deliveryLink}</a>
+          </Note>
+        </Card>
+      )}
+      {view.rejectedCount > 0 && (
+        <div className="ui-mt">
+          <Note>
+            {view.rejectedCount} recording{view.rejectedCount > 1 ? "s" : ""} didn&apos;t pass our quality checks and {view.rejectedCount > 1 ? "were" : "was"} left out.
+          </Note>
         </div>
       )}
 
-      {showGallery && <FeedbackCard id={id} versionId={selected?.id ?? null} given={view.feedback} />}
-
-      {view.brief && view.status !== "needs_input" && (
-        <div className="card">
-          <p style={{ margin: 0 }}>{view.brief.summary}</p>
-          {view.brief.facts.length > 0 && (
-            <div className="chips" style={{ marginTop: 12 }}>
-              {view.brief.facts.map((f) => (
-                <span key={f.id} className="chip" style={{ cursor: "default" }} title={f.sourceQuote ? `From your words: "${f.sourceQuote}"` : f.type}>
-                  {f.text}
-                </span>
-              ))}
-            </div>
-          )}
-          {view.brief.contradictions.length > 0 && (
-            <p className="muted" style={{ fontSize: 13 }}>We noticed something that may conflict ({view.brief.contradictions[0].issue}) and kept it out of the lyrics.</p>
-          )}
-        </div>
+      {chorus && (
+        <Card title={allLyrics ? "The lyrics" : "The chorus"}>
+          <Lyrics sections={allLyrics ? sections : [chorus]} legend="Highlighted lines came from your story. Tap one to see." />
+          <Button variant="text" onClick={() => setAllLyrics((a) => !a)}>
+            {allLyrics ? "Show just the chorus" : "See all the lyrics"}
+          </Button>
+        </Card>
       )}
 
-      {draft && view.status !== "needs_input" && (
-        <div className="card">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <h2 style={{ margin: 0 }}>{draft.title}</h2>
-            <span>
-              <span className="tag">draft {draft.version}</span>
-              {draft.singable ? <span className="tag ok">checked</span> : <span className="tag bad">needs changes</span>}
-            </span>
-          </div>
-          {!draft.singable && draft.blockingIssues.length > 0 && (
-            <ul className="err" style={{ fontSize: 14 }}>
-              {draft.blockingIssues.map((i, k) => (
-                <li key={k}>
-                  {i.section ? `${i.section}: ` : ""}
-                  {i.reason}
-                </li>
-              ))}
-            </ul>
-          )}
+      {!paid && view.draft && (
+        <Card tone="muted" title="Want to change something?">
           {!editing ? (
-            <div className="lyrics" style={{ marginTop: 12 }}>
-              {draft.displayLyrics}
-            </div>
-          ) : (
             <>
-              <label htmlFor="edit-lyrics" className="muted" style={{ fontWeight: 400 }}>Keep the section tags like [Chorus]. We check your edits before anything is sung.</label>
-              <textarea id="edit-lyrics" style={{ minHeight: 360, marginTop: 8, fontFamily: "Georgia, serif" }} value={editText} onChange={(e) => setEditText(e.target.value)} />
+              <Note>Wrong word, wrong name, or a line that isn&apos;t quite right? Edit it and we&apos;ll re-record.</Note>
+              <div className="ui-row ui-mt">
+                <Button variant="secondary" onClick={() => setEditing(true)}>
+                  Change a line
+                </Button>
+                {view.generation.canRequestMore && (
+                  <Button variant="text" disabled={song.busy} onClick={() => void song.moreTakes()}>
+                    Hear another take
+                  </Button>
+                )}
+              </div>
             </>
+          ) : (
+            <EditLyrics initial={view.draft.displayLyrics} song={song} onDone={() => setEditing(false)} />
           )}
-          {["lyrics_ready", "preview_ready", "failed"].includes(view.status) && !paid && (
-            <div className="row" style={{ marginTop: 16 }}>
-              {!editing ? (
-                <>
-                  {view.status === "lyrics_ready" && (
-                    <button className="btn" disabled={busy || !draft.singable} title={draft.singable ? "" : "Fix the issues above first"} onClick={() => post("/generate", { draftId: draft.id })}>
-                      Sing it
-                    </button>
-                  )}
-                  <button className="btn secondary" disabled={busy} onClick={() => post("/lyrics", { action: "regenerate" })}>
-                    New lyrics
-                  </button>
-                  <button
-                    className="btn secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      setEditText(draft.displayLyrics);
-                      setEditing(true);
-                    }}
-                  >
-                    Edit lines
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="btn"
-                    disabled={busy}
-                    onClick={async () => {
-                      if (await post("/lyrics", { action: "edit", text: editText })) setEditing(false);
-                    }}
-                  >
-                    Save edits
-                  </button>
-                  <button className="btn secondary" disabled={busy} onClick={() => setEditing(false)}>
-                    Cancel
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {draft.singable && draft.warnings.length > 0 && (
-            <details style={{ marginTop: 12 }}>
-              <summary className="muted" style={{ fontSize: 13, cursor: "pointer" }}>Editor notes ({draft.warnings.length})</summary>
-              <ul className="muted" style={{ fontSize: 13 }}>
-                {draft.warnings.map((w, k) => (
-                  <li key={k}>
-                    {w.section ? `${w.section}: ` : ""}
-                    {w.reason}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
+        </Card>
       )}
 
-      {error && <p className="err">{error}</p>}
-      <p className="muted" style={{ fontSize: 12, marginTop: 32 }}>Request {view.id}</p>
-    </div>
+      <FeedbackCard song={song} versionId={selected?.id ?? null} given={view.feedback} />
+    </>
+  );
+}
+
+function EditLyrics({ initial, song, onDone }: { initial: string; song: Song; onDone: () => void }) {
+  const [text, setText] = useState(initial);
+  return (
+    <>
+      <TextArea value={text} onChange={(e) => setText(e.target.value)} style={{ minHeight: 360, fontFamily: "var(--font-lyrics)" }} aria-label="Lyrics" />
+      <Note>Keep the section labels like [Chorus]. We check every edit before we sing it.</Note>
+      <div className="ui-row ui-mt">
+        <Button
+          disabled={song.busy || text.trim() === initial.trim()}
+          onClick={async () => {
+            if (await song.editAndRerecord(text)) onDone();
+          }}
+        >
+          {song.busy ? "Saving…" : "Save and re-record"}
+        </Button>
+        <Button variant="text" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -349,51 +329,143 @@ const RATINGS = [
 ];
 
 /** MVP test feedback: how the song landed, and whether the tester would pay for it. */
-function FeedbackCard({ id, versionId, given }: { id: string; versionId: string | null; given: RequestView["feedback"] }) {
+function FeedbackCard({ song, versionId, given }: { song: Song; versionId: string | null; given: RequestView["feedback"] }) {
   const [rating, setRating] = useState<number | null>(given?.rating ?? null);
-  const [wouldPay, setWouldPay] = useState<"yes" | "maybe" | "no" | null>(given?.wouldPay ?? null);
+  const [wouldPay, setWouldPay] = useState<"yes" | "maybe" | "no" | null>((given?.wouldPay as "yes" | "maybe" | "no" | null) ?? null);
   const [note, setNote] = useState(given?.note ?? "");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(given ? "sent" : "idle");
-
-  async function send() {
-    if (!rating) return;
-    setState("sending");
-    const res = await fetch(`/api/requests/${id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating, wouldPay, note, versionId }) });
-    setState(res.ok ? "sent" : "error");
-  }
+  const edit = () => setState("idle");
 
   return (
-    <div className="card">
-      <h2 style={{ marginTop: 0 }}>How did it land?</h2>
-      <p className="muted" style={{ marginTop: 0 }}>We're testing this. Your honest reaction helps more than anything.</p>
-      <div className="chips">
-        {RATINGS.map((r) => (
-          <button key={r.n} type="button" className={`chip ${rating === r.n ? "on" : ""}`} onClick={() => { setRating(r.n); setState("idle"); }} aria-pressed={rating === r.n}>
-            {r.label}
-          </button>
-        ))}
+    <Card title="How did it land?">
+      <Note>We&apos;re testing this. Your honest reaction helps more than anything.</Note>
+      <div className="ui-mt">
+        <Chips>
+          {RATINGS.map((r) => (
+            <Chip key={r.n} selected={rating === r.n} onClick={() => { setRating(r.n); edit(); }}>
+              {r.label}
+            </Chip>
+          ))}
+        </Chips>
       </div>
-      <p style={{ marginBottom: 6 }}>Would you pay $45 for this as a gift?</p>
-      <div className="chips">
-        {(["yes", "maybe", "no"] as const).map((w) => (
-          <button key={w} type="button" className={`chip ${wouldPay === w ? "on" : ""}`} onClick={() => { setWouldPay(w); setState("idle"); }} aria-pressed={wouldPay === w}>
-            {w === "yes" ? "Yes" : w === "maybe" ? "Maybe" : "No"}
-          </button>
-        ))}
+      <p className="ui-mt ui-field__label">Would you pay $45 for this as a gift?</p>
+      <div className="ui-mt">
+        <Chips>
+          {(["yes", "maybe", "no"] as const).map((w) => (
+            <Chip key={w} selected={wouldPay === w} onClick={() => { setWouldPay(w); edit(); }}>
+              {w === "yes" ? "Yes" : w === "maybe" ? "Maybe" : "No"}
+            </Chip>
+          ))}
+        </Chips>
       </div>
-      <textarea
-        style={{ marginTop: 12, minHeight: 80 }}
-        rows={3}
-        placeholder="Anything that felt off, or a line you loved? (optional)"
-        value={note}
-        onChange={(e) => { setNote(e.target.value); setState("idle"); }}
-      />
-      <div className="row" style={{ marginTop: 12, alignItems: "center" }}>
-        <button className="btn" disabled={!rating || state === "sending" || state === "sent"} onClick={send}>
+      <div className="ui-mt">
+        <TextArea style={{ minHeight: 80 }} placeholder="Anything that felt off, or a line you loved? (optional)" value={note} onChange={(e) => { setNote(e.target.value); edit(); }} />
+      </div>
+      <div className="ui-row ui-mt">
+        <Button
+          disabled={!rating || state === "sending" || state === "sent"}
+          onClick={async () => {
+            if (!rating) return;
+            setState("sending");
+            setState((await song.sendFeedback({ rating, wouldPay, note, versionId })) ? "sent" : "error");
+          }}
+        >
           {state === "sent" ? "Thanks, saved" : state === "sending" ? "Saving…" : "Send feedback"}
-        </button>
-        {state === "error" && <span className="err">Couldn't save that. Try again.</span>}
+        </Button>
+        {state === "error" && <ErrorText>Couldn&apos;t save that. Try again.</ErrorText>}
       </div>
-    </div>
+    </Card>
+  );
+}
+
+/* ----------------------- review (lyrics need a look) ----------------------- */
+
+function Review({ view, song }: { view: RequestView; song: Song }) {
+  const { name } = names(view);
+  const sections = useSections(view);
+  const [editing, setEditing] = useState(false);
+  const draft = view.draft;
+  if (!draft) return null;
+  const blocked = !draft.singable;
+  return (
+    <>
+      <ScreenTitle
+        title={blocked ? `${name}'s lyrics need a small fix` : `${name}'s lyrics are ready`}
+        subtitle={blocked ? "Our checks flagged something before we sing it. Change the line, or ask for new lyrics." : "Read them through, then we'll record."}
+      />
+      {blocked && draft.blockingIssues.length > 0 && (
+        <Card tone="muted">
+          <Checklist items={draft.blockingIssues.map((i) => `${i.section ? `${i.section}: ` : ""}${i.reason}`)} />
+        </Card>
+      )}
+      <Card title={draft.title}>
+        {editing ? <EditLyrics initial={draft.displayLyrics} song={song} onDone={() => setEditing(false)} /> : <Lyrics sections={sections} legend="Highlighted lines came from your story." />}
+      </Card>
+      {!editing && (
+        <div className="ui-row">
+          <Button disabled={song.busy || blocked} onClick={() => void song.record(draft.id)}>
+            Record it
+          </Button>
+          <Button variant="secondary" disabled={song.busy} onClick={() => setEditing(true)}>
+            Change a line
+          </Button>
+          <Button variant="text" disabled={song.busy} onClick={() => void song.newLyrics()}>
+            Write new lyrics
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------ needs input ------------------------------ */
+
+function NeedsInput({ view, song }: { view: RequestView; song: Song }) {
+  const { name } = names(view);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const qs = view.followUpQuestions;
+  return (
+    <>
+      <ScreenTitle title={`One more thing about ${name}`} subtitle="A small, specific detail will make the song unmistakably about them." />
+      {qs.map((q) => (
+        <Field key={q} label={q}>
+          <TextArea style={{ minHeight: 100 }} value={answers[q] ?? ""} onChange={(e) => setAnswers((a) => ({ ...a, [q]: e.target.value }))} />
+        </Field>
+      ))}
+      <div className="ui-row">
+        <Button disabled={song.busy || qs.some((q) => !(answers[q] ?? "").trim())} onClick={() => void song.answerFollowUps(answers)}>
+          Continue
+        </Button>
+        <Button variant="text" disabled={song.busy} onClick={() => void song.answerFollowUps(Object.fromEntries(qs.map((q) => [q, "(skipped)"])))}>
+          Skip
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/* --------------------------------- failed --------------------------------- */
+
+function Failed({ view, song }: { view: RequestView; song: Song }) {
+  const { name } = names(view);
+  const canRetry = !!view.draft?.singable && view.generation.canRequestMore;
+  return (
+    <>
+      <ScreenTitle title={`We hit a snag with ${name}'s song`} subtitle={canRetry ? "It happens now and then. Trying again usually works." : "Sorry about that. You can start a new song below."} />
+      <Card>
+        {canRetry ? (
+          <Button disabled={song.busy} onClick={() => void song.record()}>
+            Try recording again
+          </Button>
+        ) : (
+          <Button href="/create">Start a new song</Button>
+        )}
+        {view.lastError && (
+          <div className="ui-mt">
+            <Note>Details: {view.lastError}</Note>
+          </div>
+        )}
+      </Card>
+    </>
   );
 }

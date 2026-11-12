@@ -1,0 +1,60 @@
+/* Legacy dark styles for admin, test checkout and delivery pages. Scoped under .legacy so they never touch the customer funnel. */
+:root {
+  --bg: #0f0f12;
+  --panel: #18181d;
+  --panel-2: #202027;
+  --text: #f3f3f5;
+  --muted: #a3a3ad;
+  --accent: #f5b942;
+  --accent-ink: #1a1200;
+  --danger: #ff6b6b;
+  --ok: #58d68d;
+  --radius: 14px;
+}
+.legacy * { box-sizing: border-box; }
+.legacy { min-height: 100vh;  margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+.legacy a { color: var(--accent); }
+.legacy .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
+.legacy h1 { font-size: 28px; line-height: 1.2; margin: 0 0 8px; }
+.legacy h2 { font-size: 20px; margin: 24px 0 8px; }
+.legacy p.muted, .legacy .muted { color: var(--muted); }
+.legacy .card { background: var(--panel); border: 1px solid #2a2a33; border-radius: var(--radius); padding: 20px; margin: 16px 0; }
+.legacy label { display: block; font-weight: 600; margin: 16px 0 6px; }
+.legacy input[type=text], .legacy input[type=email], .legacy textarea, .legacy select {
+  width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #33333d; background: var(--panel-2); color: var(--text); font: inherit;
+}
+.legacy textarea { min-height: 140px; resize: vertical; }
+.legacy .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.legacy .chip { padding: 10px 14px; border-radius: 999px; border: 1px solid #33333d; background: var(--panel-2); color: var(--text); cursor: pointer; font: inherit; }
+.legacy .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.legacy .chip small { display: block; font-weight: 400; opacity: .8; font-size: 12px; }
+.legacy .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.legacy .btn { padding: 12px 18px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 700; cursor: pointer; }
+.legacy .btn.secondary { background: var(--panel-2); color: var(--text); border: 1px solid #33333d; }
+.legacy .btn:disabled { opacity: .5; cursor: default; }
+.legacy .progress { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin: 12px 0 24px; }
+.legacy .progress > div { height: 100%; background: var(--accent); transition: width .3s; }
+.legacy .lyrics { white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif; font-size: 17px; line-height: 1.7; }
+.legacy .tag { display: inline-block; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--panel-2); color: var(--muted); margin-right: 6px; }
+.legacy .tag.ok { color: var(--ok); }
+.legacy .tag.warn { color: var(--accent); }
+.legacy .tag.bad { color: var(--danger); }
+.legacy .err { color: var(--danger); }
+.legacy .spinner { width: 18px; height: 18px; border: 3px solid #33333d; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.legacy audio { width: 100%; margin-top: 10px; }
+.legacy .version { border: 1px solid #2a2a33; border-radius: var(--radius); padding: 16px; background: var(--panel-2); }
+.legacy .version.rejected { opacity: .6; }
+.legacy .grid2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 640px) {.legacy .grid2 { grid-template-columns: 1fr 1fr; } }
+.legacy .banner { font-size: 13px; padding: 8px 12px; border-radius: 8px; background: #2a2416; color: var(--accent); margin-bottom: 16px; }
+.legacy .version.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.legacy .version audio { margin-top: 10px; }
+.legacy :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legacy .admin { max-width: 1100px; }
+.legacy .admin .table-wrap { overflow-x: auto; }
+.legacy .admin table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.legacy .admin th, .legacy .admin td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.legacy .admin td .muted { font-size: 12px; }
+.legacy .admin pre.lyrics { white-space: pre-wrap; font-family: inherit; line-height: 1.6; }
+.legacy .wrap:has(.admin) { max-width: 1100px; }

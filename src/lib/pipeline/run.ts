@@ -26,14 +26,26 @@ import {
 import { logEvent, setStatus, failRequest, getRequest, recordLlmUsage } from "./common";
 
 export { getRequest } from "./common";
+import { startGeneration } from "./generation";
 export { startGeneration, pollIfGenerating, handleKieCallback, collectTask, advanceCandidates } from "./generation";
 export { getRequestView, selectVersion } from "./view";
 export type { RequestView } from "./view";
 
 const { songRequests, lyricDrafts } = schema;
 
+/** Story-quiz extras live in the quiz snapshot (no schema change needed). */
+function quizExtras(r: SongRequest): { giverName: string; oneLine: string; leaveOut: string; autoRecord: boolean } {
+  const q = (r.quizSnapshot ?? {}) as Record<string, unknown>;
+  const str = (k: string) => (typeof q[k] === "string" ? (q[k] as string) : "");
+  return { giverName: str("giverName"), oneLine: str("oneLine"), leaveOut: str("leaveOut"), autoRecord: q.autoRecord === true };
+}
+
 function toQuizInput(r: SongRequest): QuizInput {
+  const x = quizExtras(r);
   return {
+    giverName: x.giverName || null,
+    oneLine: x.oneLine || null,
+    leaveOut: x.leaveOut || null,
     recipientName: r.recipientName,
     pronunciation: r.pronunciation,
     relationship: r.relationship,
@@ -72,9 +84,22 @@ export async function runBriefing(requestId: string): Promise<void> {
       return;
     }
     await runLyrics(requestId, { source: "generated" });
+    await maybeAutoRecord(requestId);
   } catch (e) {
     await failRequest(requestId, e);
   }
+}
+
+/**
+ * Story-quiz projects record as soon as the first verified lyrics exist, so the
+ * buyer goes straight from the quiz to the wait page. Lyrics that need changes
+ * stop here and the buyer sees them with the issues to fix.
+ */
+async function maybeAutoRecord(requestId: string): Promise<void> {
+  const r = await getRequest(requestId);
+  if (!r || r.status !== "lyrics_ready" || r.generationAttempts > 0 || !quizExtras(r).autoRecord) return;
+  const result = await startGeneration(requestId, { trigger: "customer" });
+  await logEvent(requestId, "generation:auto_record", result.ok ? { submitted: result.submitted } : { error: result.error });
 }
 
 export async function submitFollowUpAnswers(requestId: string, answers: Record<string, string>): Promise<void> {
