@@ -115,12 +115,26 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   await strangerPage.context().close();
   await shot("e2e-3-checkout");
   await page.click('button:has-text("Pay (test)")');
-  await page.waitForURL(/\/checkout\/[0-9a-f-]{36}\/complete/, { timeout: 30000 });
-  await page.waitForSelector("text=Linda's song is yours", { timeout: 30000 });
-  await shot("e2e-3b-thank-you");
-  await page.click('a:has-text("Listen and download")');
-  await page.waitForURL(songUrl, { timeout: 30000 });
-  await page.waitForSelector('a:has-text("Download MP3")', { timeout: 30000 });
+  // Paying lands straight on the song's player page, with a one-time thank-you.
+  await page.waitForURL(/\/d\/[^/?]+\?new=1$/, { timeout: 30000 });
+  const playerUrl = page.url().split("?")[0];
+  await page.waitForSelector("text=It's yours.", { timeout: 30000 });
+  assert.ok(await page.isVisible('a[aria-label="Download MP3"]'), "download in the top corner");
+  assert.ok((await page.locator("button.pl-line").count()) > 4, "timed lyric lines");
+  // The cover is our own saved copy, served from the song's permanent link.
+  const coverSrc = await page.getAttribute(".pl-cover img", "src");
+  assert.match(coverSrc || "", /^\/api\/cover\//, "cover saved to our storage");
+  const coverRes = await page.request.get(`${BASE}${coverSrc}`);
+  assert.equal(coverRes.status(), 200);
+  assert.match(coverRes.headers()["content-type"], /^image\//);
+  assert.match(await page.getAttribute('meta[property="og:image"]', "content"), /\/api\/cover\//, "link preview uses the cover");
+  await shot("e2e-3b-player");
+  // Play: the lyric highlight follows the song.
+  await page.click('button[aria-label="Play"]');
+  await page.waitForSelector("button.pl-line.is-active", { timeout: 20000 });
+  // Coming back to the old song page goes to the player page too.
+  await page.goto(songUrl);
+  await page.waitForURL((u) => u.href.startsWith(playerUrl), { timeout: 30000 });
   await shot("e2e-4-purchased");
 
   // 6. Only the purchased version unlocks; download is an attachment; delivery link works

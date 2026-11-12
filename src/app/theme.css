@@ -35,6 +35,21 @@
   --color-dark-surface: #231b16; /* studio card, footer bars */
   --color-dark-ink: #f8f1e9;
 
+  /* Song page (the music player buyers keep and share) */
+  --player-bg: #1c1512;
+  --player-bg-glow: #7a2e1f; /* colour that fades down from the top */
+  --player-ink: #fbf3ea;
+  --player-ink-muted: rgba(251, 243, 234, 0.62);
+  --player-track: rgba(251, 243, 234, 0.22);
+  --player-accent: #fbf3ea; /* play button and progress */
+  --player-accent-ink: #1c1512;
+  --player-lyrics-bg: #a8442f;
+  --player-lyric-upcoming: rgba(28, 21, 18, 0.62);
+  --player-lyric-active: #ffffff;
+  --player-lyric-past: rgba(255, 255, 255, 0.72);
+  --player-cover-a: #c9573d; /* cover art when the song has none */
+  --player-cover-b: #4a2219;
+
   /* Type */
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

@@ -33,7 +33,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
   };
-  if (claims.t === "full") headers["Content-Disposition"] = `attachment; filename="${(claims.n ?? "song.mp3").replace(/"/g, "")}"`;
+  // A filename in the token means "download"; without one the full song streams inline (the player page).
+  if (claims.t === "full" && claims.n) headers["Content-Disposition"] = `attachment; filename="${claims.n.replace(/"/g, "")}"`;
   const range = req.headers.get("range");
   if (range) {
     const m = range.match(/bytes=(\d*)-(\d*)/);

@@ -46,3 +46,65 @@ export function chorusOf(sections: ViewSection[]): ViewSection | undefined {
 export function storyLineCount(sections: ViewSection[]): number {
   return sections.reduce((n, s) => n + s.lines.filter((l) => l.source).length, 0);
 }
+
+export type TimedWord = { word: string; startS: number; endS: number };
+export type TimedLine = ViewLine & { start: number | null };
+export type TimedSection = { tag: string; lines: TimedLine[] };
+
+const wordKey = (s: string) => s.toLowerCase().replace(/\[[^\]]*\]/g, " ").replace(/[^\p{L}\p{N}']/gu, "");
+
+/**
+ * Give each lyric line the time it starts being sung, from the recording's word timings.
+ * Walks the lines and the sung words in order; a line's start is the first of its words
+ * found a little ahead in the sung stream, so ad-libs, repeats and respelled names don't
+ * derail it. Lines that can't be placed get times interpolated between their neighbours.
+ */
+export function timeLyricLines(sections: ViewSection[], aligned: TimedWord[] | null | undefined): TimedSection[] {
+  const stream = (aligned ?? [])
+    .flatMap((w) => w.word.split(/\s+/).map((part) => ({ key: wordKey(part), t: w.startS })))
+    .filter((w) => w.key);
+  const out: TimedSection[] = sections.map((s) => ({ tag: s.tag, lines: s.lines.map((l) => ({ ...l, start: null as number | null })) }));
+  if (!stream.length) return out;
+
+  const flat = out.flatMap((s) => s.lines);
+  let pos = 0;
+  const LOOKAHEAD = 12;
+  for (const line of flat) {
+    const words = line.text.split(/\s+/).map(wordKey).filter(Boolean);
+    let first: number | null = null;
+    for (const w of words) {
+      let hit = -1;
+      for (let j = pos; j < Math.min(stream.length, pos + LOOKAHEAD); j++) {
+        if (stream[j].key === w) {
+          hit = j;
+          break;
+        }
+      }
+      if (hit >= 0) {
+        if (first === null) first = stream[hit].t;
+        pos = hit + 1;
+      }
+    }
+    line.start = first;
+  }
+
+  // Keep times increasing, then fill gaps by interpolation.
+  let last = -Infinity;
+  for (const l of flat) {
+    if (l.start !== null && l.start < last) l.start = null;
+    if (l.start !== null) last = l.start;
+  }
+  const known = flat.map((l, i) => (l.start !== null ? i : -1)).filter((i) => i >= 0);
+  if (known.length < Math.max(2, flat.length * 0.4)) return out.map((s) => ({ ...s, lines: s.lines.map((l) => ({ ...l, start: null })) }));
+  for (let i = 0; i < flat.length; i++) {
+    if (flat[i].start !== null) continue;
+    const prev = [...known].reverse().find((k) => k < i);
+    const next = known.find((k) => k > i);
+    if (prev !== undefined && next !== undefined) {
+      const a = flat[prev].start!, b = flat[next].start!;
+      flat[i].start = a + ((b - a) * (i - prev)) / (next - prev);
+    } else if (prev !== undefined) flat[i].start = flat[prev].start! + 2 * (i - prev);
+    else if (next !== undefined) flat[i].start = Math.max(0, flat[next].start! - 2 * (next - i));
+  }
+  return out;
+}

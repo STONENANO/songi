@@ -114,6 +114,8 @@ export const songVersions = pgTable("song_versions", {
   audioKey: text("audio_key"),
   previewKey: text("preview_key"),
   imageUrl: text("image_url"),
+  /** Our own copy of the cover art in storage (the provider's image link can expire). */
+  coverKey: text("cover_key"),
   duration: real("duration"),
   previewStart: real("preview_start"),
   alignedWords: jsonb("aligned_words").$type<AlignedWord[] | null>(),
