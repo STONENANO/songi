@@ -231,8 +231,47 @@ export const env = {
   },
 };
 
+/**
+ * Every reason the current configuration is unsafe to serve production traffic.
+ * Empty when it is safe (or when not running in production).
+ */
+export function productionConfigProblems(): string[] {
+  if (!env.isProd) return [];
+  const problems: string[] = [];
+
+  const kie = env.kieWebhookSecret;
+  if (!kie || kie === "change-me") {
+    problems.push("KIE_WEBHOOK_SECRET is unset or still \"change-me\"; set it to a long random string.");
+  }
+
+  // Real payments configured but webhooks unverifiable: anyone could forge a paid order.
+  if (!env.mockShopify && !env.shopify.webhookSecret) {
+    problems.push("Shopify is configured (SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN, SHOPIFY_SONG_VARIANT_ID) but SHOPIFY_WEBHOOK_SECRET is not set.");
+  }
+
+  if (env.storageDriver === "s3") {
+    const s3 = env.s3;
+    const missing = [
+      !s3.bucket && "S3_BUCKET",
+      !s3.accessKeyId && "S3_ACCESS_KEY_ID",
+      !s3.secretAccessKey && "S3_SECRET_ACCESS_KEY",
+    ].filter(Boolean);
+    if (missing.length) problems.push(`STORAGE_DRIVER=s3 but ${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} not set.`);
+  }
+
+  try {
+    void env.mediaSigningSecret;
+  } catch (e) {
+    problems.push((e as Error).message);
+  }
+
+  return problems;
+}
+
+/** Refuses to start in production with an unsafe configuration. Called once from src/instrumentation.ts. */
 export function assertSafeForProduction(): void {
-  if (!env.isProd) return;
-  if (env.kieWebhookSecret === "change-me") throw new Error("KIE_WEBHOOK_SECRET must be changed in production.");
-  void env.mediaSigningSecret;
+  const problems = productionConfigProblems();
+  if (problems.length) {
+    throw new Error(`Refusing to start: unsafe production configuration.\n- ${problems.join("\n- ")}`);
+  }
 }
