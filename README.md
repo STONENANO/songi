@@ -18,7 +18,7 @@ With no keys, everything runs in free mock mode: placeholder lyrics, test-tone a
 |---|---|
 | `ANTHROPIC_API_KEY` | Real briefs, lyrics and verification |
 | `KIE_API_KEY` | Real Suno recordings (paid) |
-| `STRIPE_*` | Real payments on the custom checkout, and payment webhooks |
+| `STRIPE_*` + `STRIPE_ENABLED=true` | Real payments on the custom checkout, and payment webhooks |
 | `MEDIA_SIGNING_SECRET` | Required in production |
 
 Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile includes ffmpeg.
@@ -36,6 +36,7 @@ Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile include
 | `KIE_WEBHOOK_HMAC_KEY` | kie.ai → Settings (production only) |
 | `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` | dashboard.stripe.com → Developers → API keys (use test keys first) |
 | `STRIPE_WEBHOOK_SECRET` | Developers → Webhooks → add `https://<domain>/api/webhooks/stripe` → signing secret (`whsec_…`). Locally: `stripe listen --forward-to localhost:4747/api/webhooks/stripe` (Stripe CLI: `npm i -g @stripe/cli`) |
+| `STRIPE_ENABLED` | The Stripe switch. `false` (default): test checkout, nothing charged, even with keys set. `true`: real payments |
 | `SONG_PRICE_CENTS` / `SONG_CURRENCY` | The price (default 3900 = $39, usd). Set on the server only |
 | `STRIPE_AUTOMATIC_TAX` / `STRIPE_TAX_CODE` / `STRIPE_TAX_BEHAVIOR` | Stripe Tax. See "Stripe Tax" below before turning it on |
 
@@ -96,7 +97,7 @@ The customer pages (quiz and song page) are built to be re-skinned without touch
    a reaction, "would you pay $45?", and a note. Fill it in with what they said.
 5. See every test song in one place at http://localhost:4747/admin?token=YOUR_ADMIN_TOKEN:
    lyrics, all takes (full audio), checker notes, cost and feedback.
-6. Checkout is in test mode until Stripe is connected: "Pay (test)" unlocks the download without charging.
+6. Checkout is in test mode while Stripe is switched off (`STRIPE_ENABLED=false`, the default): "Pay (test)" unlocks the download without charging. On a live server, also set `FREE_DOWNLOADS=true`, or the checkout step stays closed.
 
 Each song costs roughly $0.50 to $0.80 in Claude calls (two first drafts, checks, sometimes a polish pass) plus two
 Kie tasks for three takes. Note your Kie credits before and after the first song.
@@ -116,5 +117,5 @@ Sandbox and live mode keep separate tax settings and registrations, so do steps 
 
 - Set `MEDIA_SIGNING_SECRET`, `KIE_WEBHOOK_SECRET` and `KIE_WEBHOOK_HMAC_KEY` (from kie.ai settings).
 - Use Postgres (`DATABASE_URL`) and private S3/R2 storage (`STORAGE_DRIVER=s3`).
-- In Stripe: set `STRIPE_SECRET_KEY` (a restricted `rk_live_` key is safer), `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`. Add the webhook endpoint `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed` and `charge.refunded`. Add `payment_intent.succeeded` and `payment_intent.canceled` too while orders from before this change are still open. Turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay. To collect tax, follow "Stripe Tax" above in live mode.
+- Set `STRIPE_ENABLED=true` (payments are off by default). In Stripe: set `STRIPE_SECRET_KEY` (a restricted `rk_live_` key is safer), `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`. Add the webhook endpoint `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed` and `charge.refunded`. Add `payment_intent.succeeded` and `payment_intent.canceled` too while orders from before this change are still open. Turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay. To collect tax, follow "Stripe Tax" above in live mode.
 - Run on a long-running Node host; background work uses Next's `after()`.

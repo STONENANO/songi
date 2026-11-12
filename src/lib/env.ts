@@ -227,14 +227,22 @@ export const env = {
     const amount = this.songPriceCents / 100;
     return new Intl.NumberFormat("en-US", { style: "currency", currency: this.currency.toUpperCase(), minimumFractionDigits: Number.isInteger(amount) ? 0 : 2 }).format(amount);
   },
-  /** No Stripe keys: checkout uses the local test button instead of real payments. */
+  /**
+   * The Stripe switch. Off (the default) = checkout uses the test button and nothing is
+   * charged, even with Stripe keys in place, so the quiz and song generation can be tested
+   * freely. On = real payments, once the keys are set too.
+   */
+  get stripeEnabled(): boolean {
+    return flag(process.env.STRIPE_ENABLED);
+  },
+  /** Test checkout instead of Stripe: the switch is off, keys are missing, or MOCK_PAYMENTS is set. */
   get mockPayments(): boolean {
     const s = this.stripe;
-    return flag(process.env.MOCK_PAYMENTS) || !s.secretKey || !s.publishableKey;
+    return flag(process.env.MOCK_PAYMENTS) || !this.stripeEnabled || !s.secretKey || !s.publishableKey;
   },
   /**
-   * Test phase on a live server: no Stripe yet, so the checkout step unlocks the
-   * song for free. Only meaningful while Stripe is not configured.
+   * Test phase on a live server: Stripe is off, so the checkout step unlocks the
+   * song for free. Only meaningful while Stripe is off or not configured.
    */
   get freeDownloads(): boolean {
     return flag(process.env.FREE_DOWNLOADS) && this.mockPayments;
@@ -254,7 +262,7 @@ export function assertSafeForProduction(): void {
   if (env.kieWebhookSecret === "change-me") throw new Error("KIE_WEBHOOK_SECRET must be changed in production.");
   // Live payments without a webhook secret would still unlock via the return page, but refunds and
   // late confirmations would be missed: refuse to start half-configured.
-  if (!env.mockPayments && !env.stripe.webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET must be set when Stripe keys are configured.");
+  if (!env.mockPayments && !env.stripe.webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET must be set when STRIPE_ENABLED is on.");
   if (env.storageDriver === "s3") {
     const missing = (["bucket", "endpoint", "accessKeyId", "secretAccessKey"] as const).filter((k) => !env.s3[k]);
     if (missing.length) throw new Error(`STORAGE_DRIVER=s3 needs S3_BUCKET, S3_ENDPOINT, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY (missing: ${missing.join(", ")}).`);
