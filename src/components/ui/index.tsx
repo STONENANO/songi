@@ -314,6 +314,28 @@ export function Collapse({ ms, closed, children }: { ms?: number; closed?: boole
   );
 }
 
+/**
+ * The chosen tile, shrunk to one line with "Change". Used once a choice is made so the
+ * next thing to fill in moves up, above the fold.
+ */
+export function Picked({ emoji, label, sub, onChange }: { emoji?: string; label: ReactNode; sub?: ReactNode; onChange: () => void }) {
+  return (
+    <button type="button" className="ui-picked" onClick={onChange} aria-label="Change your answer">
+      {emoji && <span className="ui-tile__emoji" aria-hidden>{emoji}</span>}
+      <span className="ui-tile__text">
+        <span className="ui-tile__label">{label}</span>
+        {sub && <span className="ui-tile__sub">{sub}</span>}
+      </span>
+      <span className="ui-picked__change">Change</span>
+    </button>
+  );
+}
+
+/** A previous answer shown small, so the next question stays above the fold. */
+export function Quote({ children }: { children: ReactNode }) {
+  return <blockquote className="ui-quote">{children}</blockquote>;
+}
+
 export type RecapRow = { label: string; value: ReactNode; onEdit?: () => void };
 /** A short summary of what the buyer chose, each line editable. */
 export function Recap({ rows }: { rows: RecapRow[] }) {

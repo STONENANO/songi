@@ -11,6 +11,8 @@ import {
   Chip,
   Chips,
   Collapse,
+  Picked,
+  Quote,
   Recap,
   DetailToLyric,
   ErrorText,
@@ -64,12 +66,16 @@ export function WhoScreen(q: Quiz): ScreenParts {
     body: (
       <>
         <ScreenTitle title="Who's this song for?" subtitle="We'll write and sing a song about them, from your story." />
-        <Tiles>
-          {RELATIONSHIPS.map((r) => (
-            <Tile key={r.value} emoji={r.emoji} label={r.label} selected={q.s.relationship === r.value} onClick={() => pick(r.value)} />
-          ))}
-          <Tile emoji="✨" label="Someone else" selected={q.isOtherRel} onClick={() => pick(OTHER)} />
-        </Tiles>
+        {picked ? (
+          <Picked emoji={q.rel?.emoji ?? "✨"} label={q.rel?.label ?? "Someone else"} onChange={() => q.set("relationship", "")} />
+        ) : (
+          <Tiles>
+            {RELATIONSHIPS.map((r) => (
+              <Tile key={r.value} emoji={r.emoji} label={r.label} selected={q.s.relationship === r.value} onClick={() => pick(r.value)} />
+            ))}
+            <Tile emoji="✨" label="Someone else" selected={q.isOtherRel} onClick={() => pick(OTHER)} />
+          </Tiles>
+        )}
         {q.isOtherRel && (
           <div className="ui-mt">
             <Field label="Who are they to you?">
@@ -131,12 +137,16 @@ export function OccasionScreen(q: Quiz): ScreenParts {
     body: (
       <>
         <ScreenTitle title={`What's the occasion for ${q.name}?`} />
-        <Tiles>
-          {OCCASIONS.map((o) => (
-            <Tile key={o.value} emoji={o.emoji} label={o.label} selected={q.s.occasion === o.value} onClick={() => pick(o.value)} />
-          ))}
-          <Tile emoji="✏️" label="Something else" selected={q.isOtherOcc} onClick={() => pick(OTHER)} />
-        </Tiles>
+        {q.isOtherOcc ? (
+          <Picked emoji="✏️" label="Something else" onChange={() => q.set("occasion", "")} />
+        ) : (
+          <Tiles>
+            {OCCASIONS.map((o) => (
+              <Tile key={o.value} emoji={o.emoji} label={o.label} selected={q.s.occasion === o.value} onClick={() => pick(o.value)} />
+            ))}
+            <Tile emoji="✏️" label="Something else" selected={q.isOtherOcc} onClick={() => pick(OTHER)} />
+          </Tiles>
+        )}
         {q.isOtherOcc && (
           <div className="ui-mt">
             <Field label="What's the occasion?">
@@ -259,15 +269,19 @@ export function QuestionScreen(q: Quiz, thread: string): ScreenParts {
         title={question}
         subtitle={q.f(t.hint)}
       />
-      <TextArea
-        value={a.answer}
-        onChange={(e) => q.setAnswer(thread, { answer: e.target.value, probed: false, followUp: "", followUpAnswer: "" })}
-        placeholder={q.f(t.starters[0])}
-        maxLength={2000}
-        readOnly={phase !== "write"}
-        autoFocus={phase === "write"}
-        aria-label={question}
-      />
+      {phase === "write" ? (
+        <TextArea
+          value={a.answer}
+          onChange={(e) => q.setAnswer(thread, { answer: e.target.value, probed: false, followUp: "", followUpAnswer: "" })}
+          placeholder={q.f(t.starters[0])}
+          maxLength={2000}
+          autoFocus
+          aria-label={question}
+        />
+      ) : (
+        // Shrunk once sent, so the follow-up and its answer box stay above the fold.
+        <Quote>{a.answer}</Quote>
+      )}
       {phase === "write" && (
         <div className="ui-stack ui-mt">
           <Chips>
@@ -402,12 +416,20 @@ export function SoundScreen(q: Quiz, genres: Genre[]): ScreenParts {
     body: (
       <>
         <ScreenTitle eyebrow="Chapter 3 of 3" title={`What should ${q.name}'s song sound like?`} />
-        <Tiles>
-          {genres.map((g) => (
-            <Tile key={g.key} label={g.label} sub={g.tagline} selected={q.s.genreKey === g.key} onClick={() => q.set("genreKey", g.key)} />
-          ))}
-          <Tile label="Something else" sub="Describe the sound you want" selected={custom} onClick={() => q.set("genreKey", CUSTOM_GENRE)} />
-        </Tiles>
+        {q.s.genreKey ? (
+          <Picked
+            label={custom ? "Something else" : (genres.find((g) => g.key === q.s.genreKey)?.label ?? "")}
+            sub={custom ? "Describe the sound you want" : genres.find((g) => g.key === q.s.genreKey)?.tagline}
+            onChange={() => q.set("genreKey", "")}
+          />
+        ) : (
+          <Tiles>
+            {genres.map((g) => (
+              <Tile key={g.key} label={g.label} sub={g.tagline} selected={false} onClick={() => q.set("genreKey", g.key)} />
+            ))}
+            <Tile label="Something else" sub="Describe the sound you want" selected={false} onClick={() => q.set("genreKey", CUSTOM_GENRE)} />
+          </Tiles>
+        )}
         {custom && (
           <div className="ui-mt">
             <Field label="Describe the sound" hint="Describe sounds, not artists: “slow soul with a choir at the end”, “90s pop-punk”.">
@@ -415,14 +437,18 @@ export function SoundScreen(q: Quiz, genres: Genre[]): ScreenParts {
             </Field>
           </div>
         )}
-        <h2 className="ui-card__title ui-mt">Singer</h2>
-        <Chips>
-          {(["f", "m", "any"] as const).map((v) => (
-            <Chip key={v} selected={q.s.vocalGender === v} onClick={() => q.set("vocalGender", v)}>
-              {v === "f" ? "Female voice" : v === "m" ? "Male voice" : "Surprise me"}
-            </Chip>
-          ))}
-        </Chips>
+        {q.s.genreKey && (
+          <>
+            <h2 className="ui-card__title ui-mt">Singer</h2>
+            <Chips>
+              {(["f", "m", "any"] as const).map((v) => (
+                <Chip key={v} selected={q.s.vocalGender === v} onClick={() => q.set("vocalGender", v)}>
+                  {v === "f" ? "Female voice" : v === "m" ? "Male voice" : "Surprise me"}
+                </Chip>
+              ))}
+            </Chips>
+          </>
+        )}
       </>
     ),
     footer: (
@@ -436,8 +462,10 @@ export function SoundScreen(q: Quiz, genres: Genre[]): ScreenParts {
 /** Pre-checkout: a recap of the song they've built, then where to send it. */
 export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
   const [showPhone, setShowPhone] = useState(!!q.s.phone);
+  const [showRecap, setShowRecap] = useState(false);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q.s.email.trim());
-  const who = q.isOtherRel ? q.s.relationshipOther.trim() : (q.rel?.label ?? "");
+  // "my sister" -> "sister", so it reads "your sister".
+  const who = q.isOtherRel ? q.s.relationshipOther.trim().replace(/^(my|our)\s+/i, "") : (q.rel?.label ?? "");
   const occasion = q.isOtherOcc ? q.s.occasionOther.trim() : (q.occasion?.label ?? "");
   const topics = q.s.threads.map((t) => threadByKey(t)).filter(Boolean).map((t) => q.f(t!.label));
   const feeling = FEELINGS.find((x) => x.value === q.s.feeling);
@@ -447,33 +475,46 @@ export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
   return {
     body: (
       <>
-        <ScreenTitle eyebrow="Almost there" title={`${q.name}'s song is ready to write`} subtitle="Here's what we'll write from. Your free preview plays on the next screen." />
-        <Card>
-          <Recap
-            rows={[
-              { label: "For", value: <><b>{q.name}</b>{who ? `, your ${who.toLowerCase()}` : ""}</>, onEdit: () => q.editFromRecap("who") },
-              { label: "Occasion", value: occasion, onEdit: () => q.editFromRecap("occasion") },
-              { label: "About", value: topics.join(" · ") + (details ? ` (${details} details)` : ""), onEdit: () => q.goTo("threads") },
-              ...(feeling ? [{ label: "Feeling", value: `${feeling.emoji} ${feeling.label}`, onEdit: () => q.editFromRecap("feeling") }] : []),
-              { label: "Sound", value: `${sound}, ${voice}`, onEdit: () => q.editFromRecap("sound") },
-            ]}
-          />
-        </Card>
-        <Card title="Where should we send it?">
-          <Field label="Your email" hint="We'll email you the link so you never lose it.">
-            <TextInput type="email" inputMode="email" autoComplete="email" value={q.s.email} onChange={(e) => q.set("email", e.target.value)} placeholder="you@example.com" />
-          </Field>
-          <Field label="Who's it from? (optional)">
-            <TextInput value={q.s.giverName} onChange={(e) => q.set("giverName", e.target.value)} placeholder="Your first name" autoComplete="given-name" maxLength={60} />
-          </Field>
-          {showPhone ? (
-            <Field label="Mobile number (optional)" hint="We'll text you when it's ready.">
-              <TextInput type="tel" inputMode="tel" autoComplete="tel" value={q.s.phone} onChange={(e) => q.set("phone", e.target.value)} placeholder="(555) 123-4567" maxLength={30} />
-            </Field>
-          ) : (
-            <Button variant="text" onClick={() => setShowPhone(true)}>Text it to me too</Button>
+        <ScreenTitle eyebrow="Almost there" title={`${q.name}'s song is ready to write`} />
+        <Card tone="muted">
+          <p>
+            <b>{q.name}</b>
+            {who ? ` (your ${who.toLowerCase()})` : ""} · {occasion} · {sound}
+          </p>
+          <Note>
+            About {topics.join(" & ").toLowerCase()}
+            {details ? `, with ${details} real details` : ""}.{" "}
+            <button type="button" className="ui-recap__edit" onClick={() => setShowRecap((v) => !v)}>
+              {showRecap ? "Hide details" : "Check or edit"}
+            </button>
+          </Note>
+          {showRecap && (
+            <div className="ui-mt">
+              <Recap
+                rows={[
+                  { label: "For", value: <><b>{q.name}</b>{who ? `, your ${who.toLowerCase()}` : ""}</>, onEdit: () => q.editFromRecap("who") },
+                  { label: "Occasion", value: occasion, onEdit: () => q.editFromRecap("occasion") },
+                  { label: "About", value: topics.join(" · ") + (details ? ` (${details} details)` : ""), onEdit: () => q.goTo("threads") },
+                  ...(feeling ? [{ label: "Feeling", value: `${feeling.emoji} ${feeling.label}`, onEdit: () => q.editFromRecap("feeling") }] : []),
+                  { label: "Sound", value: `${sound}, ${voice}`, onEdit: () => q.editFromRecap("sound") },
+                ]}
+              />
+            </div>
           )}
         </Card>
+        <Field label="Where should we send it?" hint="Your free preview plays on the next screen. We'll email you the link too.">
+          <TextInput type="email" inputMode="email" autoComplete="email" value={q.s.email} onChange={(e) => q.set("email", e.target.value)} placeholder="you@example.com" aria-label="Your email" />
+        </Field>
+        <Field label="Who's it from? (optional)">
+          <TextInput value={q.s.giverName} onChange={(e) => q.set("giverName", e.target.value)} placeholder="Your first name" autoComplete="given-name" maxLength={60} />
+        </Field>
+        {showPhone ? (
+          <Field label="Mobile number (optional)" hint="We'll text you when it's ready.">
+            <TextInput type="tel" inputMode="tel" autoComplete="tel" value={q.s.phone} onChange={(e) => q.set("phone", e.target.value)} placeholder="(555) 123-4567" maxLength={30} />
+          </Field>
+        ) : (
+          <Button variant="text" onClick={() => setShowPhone(true)}>Text it to me too</Button>
+        )}
         {q.error && <ErrorText>{q.error}</ErrorText>}
       </>
     ),

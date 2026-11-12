@@ -39,7 +39,8 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   await tap("Continue");
   await page.waitForSelector('button:has-text("Add to the song")', { timeout: 15000 });
   await shot("e2e-0-followup");
-  await page.locator("textarea").nth(1).fill("She says it every time I call her before a big exam.");
+  // The first answer shrinks to a quote, so the follow-up box is the only text box.
+  await page.locator("textarea").first().fill("She says it every time I call her before a big exam.");
   await tap("Add to the song");
   await page.waitForSelector("text=hard to say out loud", { timeout: 15000 });
   await page.locator("textarea").first().fill("You made every ordinary Sunday feel like a holiday.");
