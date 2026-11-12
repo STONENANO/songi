@@ -5,16 +5,21 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FEELINGS, OCCASIONS, RELATIONSHIPS, fill, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
+import { FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, fill, inferRelationship, isGentleOccasion, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
 
 export type ThreadAnswer = { answer: string; followUp: string; followUpAnswer: string; probed: boolean };
 
 export type QuizState = {
   relationship: string;
+  /** Typed answer when "Someone else" is picked. */
+  relationshipOther: string;
+  /** Pronoun picked for "Someone else" ("" = guess from what they typed). */
+  pronounOther: "" | Pronoun;
   recipientName: string;
   pronunciation: string;
   occasion: string;
-  neededBy: string;
+  /** Typed answer when "Something else" is picked. */
+  occasionOther: string;
   threads: string[];
   answers: Record<string, ThreadAnswer>;
   ingredients: string[];
@@ -22,6 +27,8 @@ export type QuizState = {
   feeling: string;
   leaveOut: string;
   genreKey: string;
+  /** Typed sound description when the "Something else" genre is picked. */
+  customStyle: string;
   vocalGender: "m" | "f" | "any";
   email: string;
   phone: string;
@@ -31,10 +38,12 @@ export type QuizState = {
 
 const EMPTY: QuizState = {
   relationship: "",
+  relationshipOther: "",
+  pronounOther: "",
   recipientName: "",
   pronunciation: "",
   occasion: "",
-  neededBy: "",
+  occasionOther: "",
   threads: [],
   answers: {},
   ingredients: [],
@@ -42,6 +51,7 @@ const EMPTY: QuizState = {
   feeling: "",
   leaveOut: "",
   genreKey: "",
+  customStyle: "",
   vocalGender: "any",
   email: "",
   phone: "",
@@ -53,18 +63,20 @@ export const MAX_THREADS = 3;
 export const MIN_THREADS = 2;
 export const MAX_PROBES = 3;
 export const MIN_ANSWER_CHARS = 15;
-const STORAGE_KEY = "story-quiz-v1";
+const STORAGE_KEY = "story-quiz-v2";
+/** Genre tile for "describe it yourself"; recorded as pop plus the buyer's description. */
+export const CUSTOM_GENRE = "custom";
 
 export const CHAPTERS = ["Who it's for", "Their story", "The sound"] as const;
 
-export type StepId = string; // "who" | "name" | "occasion" | "story_intro" | "threads" | `q:${thread}` | "one_line" | "feeling" | "sound" | "send"
+export type StepId = string; // "who" | "occasion" | "threads" | `q:${thread}` | "one_line" | "feeling" | "sound" | "send"
 
 function stepsFor(threads: string[]): StepId[] {
-  return ["who", "name", "occasion", "story_intro", "threads", ...threads.map((t) => `q:${t}`), "one_line", "feeling", "sound", "send"];
+  return ["who", "occasion", "threads", ...threads.map((t) => `q:${t}`), "one_line", "feeling", "sound", "send"];
 }
 
 function chapterOf(step: StepId): number {
-  if (step === "who" || step === "name" || step === "occasion") return 0;
+  if (step === "who" || step === "occasion") return 0;
   if (step === "sound" || step === "send") return 2;
   return 1;
 }
@@ -119,9 +131,16 @@ export function useQuiz() {
   }, [s, loaded]);
 
   const rel = RELATIONSHIPS.find((r) => r.value === s.relationship);
-  const pronoun: Pronoun = rel?.pronoun ?? "they";
-  const group: Group = rel?.group ?? "other";
+  const isOtherRel = s.relationship === OTHER;
+  const guessed = isOtherRel ? inferRelationship(s.relationshipOther) : null;
+  const pronoun: Pronoun = rel?.pronoun ?? (s.pronounOther || guessed?.pronoun || "they");
+  const group: Group = rel?.group ?? guessed?.group ?? "other";
+  /** What we send as the relationship: the tile, or what they typed. */
+  const relationshipValue = isOtherRel ? s.relationshipOther.trim().slice(0, 40) : s.relationship;
   const occasion = OCCASIONS.find((o) => o.value === s.occasion);
+  const isOtherOcc = s.occasion === OTHER;
+  const occasionValue = isOtherOcc ? s.occasionOther.trim().slice(0, 40) : s.occasion;
+  const gentle = !!occasion?.gentle || (isOtherOcc && isGentleOccasion(s.occasionOther));
   const name = s.recipientName.trim() || "them";
   const f = useCallback((template: string) => fill(template, name, pronoun), [name, pronoun]);
 
@@ -242,7 +261,7 @@ export function useQuiz() {
           signal: ctrl.signal,
           body: JSON.stringify({
             recipientName: s.recipientName,
-            relationship: s.relationship,
+            relationship: relationshipValue,
             pronoun,
             question,
             answer,
@@ -258,7 +277,7 @@ export function useQuiz() {
         clearTimeout(timer);
       }
     },
-    [s.recipientName, s.relationship, pronoun, f],
+    [s.recipientName, relationshipValue, pronoun, f],
   );
 
   const submit = useCallback(async () => {
@@ -285,14 +304,14 @@ export function useQuiz() {
       body: JSON.stringify({
         recipientName: s.recipientName,
         pronunciation: s.pronunciation,
-        relationship: s.relationship,
-        occasion: s.occasion,
-        neededBy: s.neededBy,
+        relationship: relationshipValue,
+        occasion: occasionValue,
         answers,
         oneLine: s.oneLine,
         feeling: s.feeling,
         leaveOut: s.leaveOut,
-        genreKey: s.genreKey,
+        genreKey: s.genreKey === CUSTOM_GENRE ? "pop" : s.genreKey,
+        customStyle: s.genreKey === CUSTOM_GENRE ? s.customStyle : "",
         vocalGender: s.vocalGender,
         mood: feeling?.mood ?? "",
         email: s.email,
@@ -336,9 +355,12 @@ export function useQuiz() {
     answered,
     strength,
     rel,
+    isOtherRel,
     group,
     pronoun,
     occasion,
+    isOtherOcc,
+    gentle,
     name,
     f,
     submit,

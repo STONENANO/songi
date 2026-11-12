@@ -26,9 +26,7 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   await tap("Mom");
   await page.getByLabel("Their name").fill("Linda");
   await tap("Continue");
-  await tap("Birthday");
-  await tap("Continue");
-  await tap("Let's do it");
+  await tap("Birthday"); // occasion tiles move on by themselves
   await tap("Growing up");
   await tap("Her favourite sayings");
   await tap("Continue");

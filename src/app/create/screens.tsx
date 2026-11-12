@@ -24,8 +24,8 @@ import {
   Tip,
   TrustRow,
 } from "@/components/ui";
-import { DETAIL_EXAMPLES, NEEDED_BY, OCCASIONS, RELATIONSHIPS, TRUST, feelingsFor, threadByKey, threadsFor } from "@/lib/onboarding/content";
-import { MAX_PROBES, MAX_THREADS, MIN_ANSWER_CHARS, MIN_THREADS, track, type Quiz } from "./use-quiz";
+import { DETAIL_EXAMPLES, OCCASIONS, OTHER, RELATIONSHIPS, TRUST, feelingsFor, threadByKey, threadsFor } from "@/lib/onboarding/content";
+import { CUSTOM_GENRE, MAX_PROBES, MAX_THREADS, MIN_ANSWER_CHARS, MIN_THREADS, track, type Quiz } from "./use-quiz";
 
 export type Genre = { key: string; label: string; tagline: string };
 
@@ -39,10 +39,24 @@ const KEYBOARD_TIP = "Prefer talking? Tap the 🎤 on your keyboard and just spe
 
 /* ------------------------------- Chapter 1 ------------------------------- */
 
+const PRONOUN_CHOICES: { value: "she" | "he" | "they"; label: string }[] = [
+  { value: "she", label: "She / her" },
+  { value: "he", label: "He / him" },
+  { value: "they", label: "They / them" },
+];
+
+/** Who it's for and their name, on one screen. */
 export function WhoScreen(q: Quiz): ScreenParts {
+  const [showSay, setShowSay] = useState(!!q.s.pronunciation);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const picked = !!q.s.relationship;
+  const name = q.s.recipientName.trim();
+  const otherOk = !q.isOtherRel || q.s.relationshipOther.trim().length >= 2;
+  const their = q.pronoun === "she" ? "her" : q.pronoun === "he" ? "his" : "their";
   const pick = (v: string) => {
     q.set("relationship", v);
-    setTimeout(q.next, 180);
+    // Tiles go straight to the name; "Someone else" types who first.
+    if (v !== OTHER) setTimeout(() => nameRef.current?.focus(), 50);
   };
   return {
     body: (
@@ -52,114 +66,107 @@ export function WhoScreen(q: Quiz): ScreenParts {
           {RELATIONSHIPS.map((r) => (
             <Tile key={r.value} emoji={r.emoji} label={r.label} selected={q.s.relationship === r.value} onClick={() => pick(r.value)} />
           ))}
+          <Tile emoji="✨" label="Someone else" selected={q.isOtherRel} onClick={() => pick(OTHER)} />
         </Tiles>
-      </>
-    ),
-    footer: <TrustRow items={TRUST} />,
-  };
-}
-
-export function NameScreen(q: Quiz): ScreenParts {
-  const [showSay, setShowSay] = useState(!!q.s.pronunciation);
-  const name = q.s.recipientName.trim();
-  const their = q.pronoun === "she" ? "her" : q.pronoun === "he" ? "his" : "their";
-  return {
-    body: (
-      <>
-        <ScreenTitle title={`What's ${their} name?`} subtitle="First name or the nickname you call them." />
-        <TextInput
-          hero
-          autoFocus
-          value={q.s.recipientName}
-          onChange={(e) => q.set("recipientName", e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && name && q.next()}
-          placeholder="Name"
-          maxLength={60}
-          autoComplete="off"
-          enterKeyHint="next"
-          aria-label="Their name"
-        />
-        <div className="ui-mt ui-center">
-          {name ? <Note>We&apos;ll sing <b>{name}</b> in the chorus.</Note> : <Note>&nbsp;</Note>}
-        </div>
-        <div className="ui-mt">
-          {showSay ? (
-            <Field label="How do you say it?" hint="Spell it how it sounds, e.g. Shiv-awn for Siobhan.">
-              <TextInput value={q.s.pronunciation} onChange={(e) => q.set("pronunciation", e.target.value)} placeholder="Shiv-awn" maxLength={60} />
+        {q.isOtherRel && (
+          <div className="ui-mt">
+            <Field label="Who are they to you?">
+              <TextInput autoFocus value={q.s.relationshipOther} onChange={(e) => q.set("relationshipOther", e.target.value)} placeholder="e.g. my sister, best friend, my coach" maxLength={40} />
             </Field>
-          ) : (
-            <div className="ui-center">
+            <Chips>
+              {PRONOUN_CHOICES.map((p) => (
+                <Chip key={p.value} selected={q.pronoun === p.value} onClick={() => q.set("pronounOther", p.value)}>
+                  {p.label}
+                </Chip>
+              ))}
+            </Chips>
+          </div>
+        )}
+        {picked && (
+          <div className="ui-mt">
+            <Field label={`What's ${their} name?`} hint={name ? `We'll sing “${name}” in the chorus.` : "First name or the nickname you call them."}>
+              <TextInput
+                ref={nameRef}
+                value={q.s.recipientName}
+                onChange={(e) => q.set("recipientName", e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && name && otherOk && q.next()}
+                placeholder="Name"
+                maxLength={60}
+                autoComplete="off"
+                enterKeyHint="next"
+                aria-label="Their name"
+              />
+            </Field>
+            {showSay ? (
+              <Field label="How do you say it?" hint="Spell it how it sounds, e.g. Shiv-awn for Siobhan.">
+                <TextInput value={q.s.pronunciation} onChange={(e) => q.set("pronunciation", e.target.value)} placeholder="Shiv-awn" maxLength={60} />
+              </Field>
+            ) : (
               <Button variant="text" onClick={() => setShowSay(true)}>Unusual name? Tell us how to say it</Button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </>
     ),
-    footer: (
-      <Button block disabled={!name} onClick={q.next}>
+    footer: picked ? (
+      <Button block disabled={!name || !otherOk} onClick={q.next}>
         Continue
       </Button>
+    ) : (
+      <TrustRow items={TRUST} />
     ),
   };
 }
 
 export function OccasionScreen(q: Quiz): ScreenParts {
+  const otherOk = !q.isOtherOcc || q.s.occasionOther.trim().length >= 2;
+  const pick = (v: string) => {
+    q.set("occasion", v);
+    if (v !== OTHER) setTimeout(q.next, 180);
+  };
   return {
     body: (
       <>
         <ScreenTitle title={`What's the occasion for ${q.name}?`} />
         <Tiles>
           {OCCASIONS.map((o) => (
-            <Tile key={o.value} emoji={o.emoji} label={o.label} selected={q.s.occasion === o.value} onClick={() => q.set("occasion", o.value)} />
+            <Tile key={o.value} emoji={o.emoji} label={o.label} selected={q.s.occasion === o.value} onClick={() => pick(o.value)} />
           ))}
+          <Tile emoji="✏️" label="Something else" selected={q.isOtherOcc} onClick={() => pick(OTHER)} />
         </Tiles>
-        <h2 className="ui-card__title ui-mt">When do you need it?</h2>
-        <Chips>
-          {NEEDED_BY.map((n) => (
-            <Chip key={n.value} selected={q.s.neededBy === n.value} onClick={() => q.set("neededBy", q.s.neededBy === n.value ? "" : n.value)}>
-              {n.label}
-            </Chip>
-          ))}
-        </Chips>
+        {q.isOtherOcc && (
+          <div className="ui-mt">
+            <Field label="What's the occasion?">
+              <TextInput autoFocus value={q.s.occasionOther} onChange={(e) => q.set("occasionOther", e.target.value)} onKeyDown={(e) => e.key === "Enter" && otherOk && q.next()} placeholder="e.g. graduation, retirement, in memory" maxLength={40} />
+            </Field>
+          </div>
+        )}
       </>
     ),
-    footer: (
-      <Button block disabled={!q.s.occasion} onClick={q.next}>
+    footer: q.isOtherOcc ? (
+      <Button block disabled={!otherOk} onClick={q.next}>
         Continue
       </Button>
+    ) : (
+      <TrustRow items={TRUST} />
     ),
   };
 }
 
 /* ------------------------------- Chapter 2 ------------------------------- */
 
-export function StoryIntroScreen(q: Quiz): ScreenParts {
+/** Pick story topics, with the "detail becomes a lyric" example on top. */
+export function ThreadsScreen(q: Quiz): ScreenParts {
+  const options = threadsFor(q.group);
+  const n = q.s.threads.length;
   const ex = DETAIL_EXAMPLES[q.group];
   return {
     body: (
       <>
-        <ScreenTitle eyebrow="Chapter 2 of 3" title="Now the good part." subtitle={`The best songs come from small, specific moments, not big words. A few quick questions about ${q.name}.`} />
-        <Card tone="muted" title="Here's how it works">
+        <ScreenTitle eyebrow="Chapter 2 of 3" title={`What should ${q.name}'s song be about?`} subtitle={`Pick ${MIN_THREADS} or ${MAX_THREADS}. We'll ask one quick question about each. Small, specific moments make the best songs.`} />
+        <Card tone="muted">
           <DetailToLyric from={ex.from} to={ex.to} />
         </Card>
-        <Note>You don&apos;t need to be a writer. Plain sentences are perfect, and you can skip anything.</Note>
-      </>
-    ),
-    footer: (
-      <Button block onClick={q.next}>
-        Let&apos;s do it
-      </Button>
-    ),
-  };
-}
-
-export function ThreadsScreen(q: Quiz): ScreenParts {
-  const options = threadsFor(q.group);
-  const n = q.s.threads.length;
-  return {
-    body: (
-      <>
-        <ScreenTitle title={`What should ${q.name}'s song be about?`} subtitle={`Pick ${MIN_THREADS} or ${MAX_THREADS}. We'll ask one quick question about each.`} />
         <Tiles>
           {options.map((t) => {
             const on = q.s.threads.includes(t.key);
@@ -173,7 +180,7 @@ export function ThreadsScreen(q: Quiz): ScreenParts {
         <Button block disabled={n < MIN_THREADS} onClick={q.next}>
           {n < MIN_THREADS ? `Pick ${MIN_THREADS - n} more` : "Continue"}
         </Button>
-        <p className="ui-footer__note">{n}/{MAX_THREADS} picked</p>
+        <p className="ui-footer__note">{n}/{MAX_THREADS} picked · plain sentences are perfect, and you can skip anything</p>
       </>
     ),
   };
@@ -333,7 +340,8 @@ export function OneLineScreen(q: Quiz): ScreenParts {
 }
 
 export function FeelingScreen(q: Quiz): ScreenParts {
-  const feelings = feelingsFor(q.group, q.occasion);
+  const feelings = feelingsFor(q.group, q.gentle);
+  const [showLeaveOut, setShowLeaveOut] = useState(!!q.s.leaveOut);
   const label = q.strength >= 4 ? "Strong story" : q.strength >= 2 ? "Good story" : "A good start";
   const details = q.s.ingredients.length + (q.s.oneLine.trim() ? 1 : 0);
   return {
@@ -346,9 +354,13 @@ export function FeelingScreen(q: Quiz): ScreenParts {
           ))}
         </Tiles>
         <div className="ui-mt">
-          <Field label="Anything we should leave out? (optional)" hint="An ex, a loss, a nickname they hate. We'll keep it out of the song.">
-            <TextInput value={q.s.leaveOut} onChange={(e) => q.set("leaveOut", e.target.value)} placeholder="e.g. don't mention the divorce" maxLength={300} />
-          </Field>
+          {showLeaveOut ? (
+            <Field label="Anything we should leave out?" hint="An ex, a loss, a nickname they hate. We'll keep it out of the song.">
+              <TextInput autoFocus value={q.s.leaveOut} onChange={(e) => q.set("leaveOut", e.target.value)} placeholder="e.g. don't mention the divorce" maxLength={300} />
+            </Field>
+          ) : (
+            <Button variant="text" onClick={() => setShowLeaveOut(true)}>Anything we should leave out?</Button>
+          )}
         </div>
         <Card tone="muted">
           <div className="ui-row" style={{ justifyContent: "space-between" }}>
@@ -374,6 +386,8 @@ export function FeelingScreen(q: Quiz): ScreenParts {
 /* ------------------------------- Chapter 3 ------------------------------- */
 
 export function SoundScreen(q: Quiz, genres: Genre[]): ScreenParts {
+  const custom = q.s.genreKey === CUSTOM_GENRE;
+  const ready = !!q.s.genreKey && (!custom || q.s.customStyle.trim().length >= 3);
   return {
     body: (
       <>
@@ -382,7 +396,15 @@ export function SoundScreen(q: Quiz, genres: Genre[]): ScreenParts {
           {genres.map((g) => (
             <Tile key={g.key} label={g.label} sub={g.tagline} selected={q.s.genreKey === g.key} onClick={() => q.set("genreKey", g.key)} />
           ))}
+          <Tile label="Something else" sub="Describe the sound you want" selected={custom} onClick={() => q.set("genreKey", CUSTOM_GENRE)} />
         </Tiles>
+        {custom && (
+          <div className="ui-mt">
+            <Field label="Describe the sound" hint="Describe sounds, not artists: “slow soul with a choir at the end”, “90s pop-punk”.">
+              <TextInput autoFocus value={q.s.customStyle} onChange={(e) => q.set("customStyle", e.target.value)} placeholder="e.g. soft piano ballad that builds" maxLength={300} />
+            </Field>
+          </div>
+        )}
         <h2 className="ui-card__title ui-mt">Singer</h2>
         <Chips>
           {(["f", "m", "any"] as const).map((v) => (
@@ -394,7 +416,7 @@ export function SoundScreen(q: Quiz, genres: Genre[]): ScreenParts {
       </>
     ),
     footer: (
-      <Button block disabled={!q.s.genreKey} onClick={q.next}>
+      <Button block disabled={!ready} onClick={q.next}>
         Continue
       </Button>
     ),

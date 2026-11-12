@@ -11,6 +11,7 @@ export type Group = "partner" | "parent" | "grandparent" | "child" | "sibling" |
 
 export type Relationship = { value: string; label: string; emoji: string; pronoun: Pronoun; group: Group };
 
+/** Eight common choices; everyone else uses "Someone else" and types who they are. */
 export const RELATIONSHIPS: Relationship[] = [
   { value: "wife", label: "Wife", emoji: "💍", pronoun: "she", group: "partner" },
   { value: "husband", label: "Husband", emoji: "💍", pronoun: "he", group: "partner" },
@@ -20,18 +21,41 @@ export const RELATIONSHIPS: Relationship[] = [
   { value: "dad", label: "Dad", emoji: "🧢", pronoun: "he", group: "parent" },
   { value: "grandma", label: "Grandma", emoji: "🧶", pronoun: "she", group: "grandparent" },
   { value: "grandpa", label: "Grandpa", emoji: "🎣", pronoun: "he", group: "grandparent" },
-  { value: "daughter", label: "Daughter", emoji: "🌟", pronoun: "she", group: "child" },
-  { value: "son", label: "Son", emoji: "⭐", pronoun: "he", group: "child" },
-  { value: "sister", label: "Sister", emoji: "👯", pronoun: "she", group: "sibling" },
-  { value: "brother", label: "Brother", emoji: "🤜", pronoun: "he", group: "sibling" },
-  { value: "best friend", label: "Best friend", emoji: "🫶", pronoun: "they", group: "friend" },
-  { value: "partner", label: "Partner", emoji: "💞", pronoun: "they", group: "partner" },
-  { value: "friend", label: "Friend", emoji: "🙌", pronoun: "they", group: "friend" },
-  { value: "someone special", label: "Someone else", emoji: "✨", pronoun: "they", group: "other" },
 ];
+/** The fill-in-the-blank tile. */
+export const OTHER = "other";
+
+/**
+ * For "Someone else", guess the topic group and pronoun from what they typed
+ * ("my sister", "best friend", "coach"). The buyer can still change the pronoun.
+ */
+export function inferRelationship(text: string): { group: Group; pronoun: Pronoun | null } {
+  const t = text.toLowerCase();
+  const has = (re: RegExp) => re.test(t);
+  const pronoun: Pronoun | null = has(/\b(sister|daughter|wife|girlfriend|mom|mother|mum|aunt|niece|grandma|nana|granny|fianc[eé]e|she|her|lady|woman|girl)\b/)
+    ? "she"
+    : has(/\b(brother|son|husband|boyfriend|dad|father|uncle|nephew|grandpa|papa|grandad|fianc[eé]|he|him|man|guy|boy)\b/)
+      ? "he"
+      : null;
+  const group: Group = has(/\b(wife|husband|girlfriend|boyfriend|partner|fianc|spouse|love)\b/)
+    ? "partner"
+    : has(/\b(grand|nana|granny|papa)/)
+      ? "grandparent"
+      : has(/\b(mom|mother|mum|dad|father|step ?(mom|dad))\b/)
+        ? "parent"
+        : has(/\b(daughter|son|kid|child|baby|niece|nephew)\b/)
+          ? "child"
+          : has(/\b(sister|brother|sibling|twin)\b/)
+            ? "sibling"
+            : has(/\b(friend|bestie|bff|buddy|pal|roommate)\b/)
+              ? "friend"
+              : "other";
+  return { group, pronoun };
+}
 
 export type Occasion = { value: string; label: string; emoji: string; gentle?: boolean };
 
+/** Eight common occasions; anything else goes in "Something else". */
 export const OCCASIONS: Occasion[] = [
   { value: "birthday", label: "Birthday", emoji: "🎂" },
   { value: "anniversary", label: "Anniversary", emoji: "🥂" },
@@ -39,21 +63,14 @@ export const OCCASIONS: Occasion[] = [
   { value: "mothers_day", label: "Mother's Day", emoji: "💐" },
   { value: "fathers_day", label: "Father's Day", emoji: "👔" },
   { value: "wedding", label: "Wedding", emoji: "💒" },
-  { value: "proposal", label: "Proposal", emoji: "💍" },
   { value: "christmas", label: "Christmas", emoji: "🎄" },
-  { value: "graduation", label: "Graduation", emoji: "🎓" },
-  { value: "new_baby", label: "New baby", emoji: "🍼" },
-  { value: "thank_you", label: "Thank you", emoji: "🙏" },
-  { value: "apology", label: "I'm sorry", emoji: "🕊️" },
   { value: "just_because", label: "Just because", emoji: "☀️" },
-  { value: "in_memory", label: "In memory", emoji: "🕯️", gentle: true },
 ];
 
-export const NEEDED_BY = [
-  { value: "this_week", label: "This week" },
-  { value: "this_month", label: "This month" },
-  { value: "no_rush", label: "No rush" },
-];
+/** Typed-in occasions that call for a gentler song (no "laugh" or "dance" feelings). */
+export function isGentleOccasion(text: string): boolean {
+  return /\b(memory|memorial|passed|passing|funeral|loss|lost|rip|celebration of life|heaven|remember)/i.test(text);
+}
 
 /** A story thread: one chip on the "what should it be about" screen, and the question it unlocks. */
 export type Thread = {
@@ -214,6 +231,18 @@ const T: Record<string, Thread> = {
   },
 };
 
+/** The fill-in-the-blank topic, offered for every relationship. */
+const OTHER_TOPIC: Thread = {
+  key: "something_else",
+  label: "Something else",
+  emoji: "✏️",
+  question: "What else should {name}'s song be about?",
+  hint: "Anything we didn't ask: a trip, a pet, a song you share, a hard year.",
+  starters: ["I want the song to mention…", "Something only we know is…"],
+  dig: "Tell us one moment about that you still think about.",
+};
+T[OTHER_TOPIC.key] = OTHER_TOPIC;
+
 const BY_GROUP: Record<Group, string[]> = {
   partner: ["how_met", "moment_knew", "laugh", "sayings", "hard_time", "places", "kids_family", "inside_joke", "little_things", "future"],
   parent: ["childhood", "taught_me", "sayings", "gives", "hard_time", "traditions", "laugh", "little_things", "proud", "places"],
@@ -225,7 +254,7 @@ const BY_GROUP: Record<Group, string[]> = {
 };
 
 export function threadsFor(group: Group): Thread[] {
-  return BY_GROUP[group].map((k) => T[k]);
+  return [...BY_GROUP[group], OTHER_TOPIC.key].map((k) => T[k]);
 }
 
 export function threadByKey(key: string): Thread | undefined {
@@ -244,10 +273,10 @@ export const FEELINGS: Feeling[] = [
 ];
 
 /** Feelings to show for a relationship and occasion. */
-export function feelingsFor(group: Group, occasion: Occasion | undefined): Feeling[] {
+export function feelingsFor(group: Group, gentle: boolean): Feeling[] {
   return FEELINGS.filter((f) => {
     if (f.value === "chosen" && group !== "partner") return false;
-    if (occasion?.gentle && (f.value === "laugh" || f.value === "celebrate")) return false;
+    if (gentle && (f.value === "laugh" || f.value === "celebrate")) return false;
     return true;
   });
 }

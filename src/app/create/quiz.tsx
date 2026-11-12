@@ -4,13 +4,11 @@ import { Screen } from "@/components/ui";
 import { useQuiz, type Quiz } from "./use-quiz";
 import {
   FeelingScreen,
-  NameScreen,
   OccasionScreen,
   OneLineScreen,
   QuestionScreen,
   SendScreen,
   SoundScreen,
-  StoryIntroScreen,
   ThreadsScreen,
   WhoScreen,
   type Genre,
@@ -39,12 +37,8 @@ function render(q: Quiz, genres: Genre[]): ScreenParts {
   switch (step) {
     case "who":
       return WhoScreen(q);
-    case "name":
-      return NameScreen(q);
     case "occasion":
       return OccasionScreen(q);
-    case "story_intro":
-      return StoryIntroScreen(q);
     case "threads":
       return ThreadsScreen(q);
     case "one_line":
