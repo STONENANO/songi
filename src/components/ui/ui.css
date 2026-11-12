@@ -66,7 +66,6 @@
 .ui-btn--block { width: 100%; }
 
 /* ---------- Tiles (big single/multi choice) ---------- */
-/* Emoji sit in pencil grey until picked, then come to life in colour. */
 .ui-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .ui-tiles--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ui-tile { position: relative; min-height: 64px; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); text-align: left; background: var(--color-surface); border: 1.5px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-chunky); cursor: pointer; transition: border-color var(--duration-fast), background var(--duration-fast), transform 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out); }
@@ -76,8 +75,8 @@
 .ui-tile--on:hover { box-shadow: 0 4px 0 var(--color-primary-deep); transform: translateY(-2px) rotate(-1deg); }
 .ui-tile--on .ui-tile__sub { color: rgba(255, 255, 255, 0.85); }
 @keyframes ui-boing { from { transform: scale(0.92); } }
-.ui-tile__emoji { font-size: 24px; line-height: 1; flex: none; filter: grayscale(1) contrast(1.05); opacity: 0.75; transition: filter 0.4s var(--ease-out), opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out); }
-.ui-tile:hover .ui-tile__emoji, .ui-tile--on .ui-tile__emoji, .ui-picked .ui-tile__emoji { filter: none; opacity: 1; }
+.ui-tile__emoji { font-size: 26px; line-height: 1; flex: none; transition: transform 0.4s var(--ease-bounce); }
+.ui-tile:hover .ui-tile__emoji { transform: scale(1.1) rotate(-4deg); }
 .ui-tile--on .ui-tile__emoji { transform: scale(1.15) rotate(-6deg); }
 .ui-tile__text { display: flex; flex-direction: column; min-width: 0; }
 .ui-tile__label { font-weight: var(--weight-medium); }
