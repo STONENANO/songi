@@ -28,6 +28,8 @@ export function phaseOf(view: RequestView | null, problem: "missing" | "denied" 
     case "processing":
       return "recording";
     case "preview_ready":
+      // Ready but nothing offered yet: still settling, keep waiting rather than showing an error.
+      return view.candidates.length ? "versions" : "recording";
     case "purchased":
       return view.candidates.length ? "versions" : "failed";
     case "needs_input":
@@ -64,7 +66,8 @@ export function useSong(id: string) {
   useEffect(() => {
     if (awaiting && view && (view.status !== awaiting.from || Date.now() > awaiting.until)) setAwaiting(null);
   }, [awaiting, view]);
-  const working = !!view && (isWorking(view.status) || autoRecordPending(view));
+  const settling = !!view && view.status === "preview_ready" && !view.candidates.length;
+  const working = !!view && (isWorking(view.status) || autoRecordPending(view) || settling);
   useEffect(() => {
     if (!working && !pendingOrder && !awaiting) return;
     const t = setInterval(load, awaiting ? 1500 : pendingOrder ? 4000 : 3000);

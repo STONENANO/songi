@@ -321,30 +321,36 @@ function shuffle<T>(xs: T[]): T[] {
 
 async function finalize(r: SongRequest, draftId: string): Promise<void> {
   const db = await getDb();
-  const won = await db
-    .update(songRequests)
-    .set({ status: "preview_ready", candidatesFinalizedAt: new Date(), updatedAt: new Date(), lastError: null })
-    .where(and(eq(songRequests.id, r.id), inArray(songRequests.status, ["generating", "processing"])))
-    .returning({ id: songRequests.id });
-  if (!won.length) return;
+  // One transaction: the song becomes preview_ready together with its offered versions. A page
+  // polling in between would otherwise see "ready" with nothing to offer and show the error screen.
+  const ordered = await db.transaction(async (tx) => {
+    const won = await tx
+      .update(songRequests)
+      .set({ status: "preview_ready", candidatesFinalizedAt: new Date(), updatedAt: new Date(), lastError: null })
+      .where(and(eq(songRequests.id, r.id), inArray(songRequests.status, ["generating", "processing"])))
+      .returning({ id: songRequests.id });
+    if (!won.length) return null;
 
-  const rows = await db
-    .select({ id: songVersions.id, score: songVersions.score, variantId: songVersions.variantId, slot: generations.slot, generationId: songVersions.generationId, selected: songVersions.selected })
-    .from(songVersions)
-    .innerJoin(generations, eq(songVersions.generationId, generations.id))
-    .where(and(eq(songVersions.requestId, r.id), eq(generations.lyricDraftId, draftId), eq(songVersions.status, "ready"), eq(songVersions.availability, "available")));
-  const picked = selectCandidates(
-    rows.map((x) => ({ ...x, score: x.score ?? 0, slot: x.slot ?? 0 })),
-    env.desiredCandidates,
-    env.candidateCollection,
-  );
-  const ordered = env.randomizeCandidateOrder ? shuffle(picked) : picked;
-  await db.update(songVersions).set({ offered: false, offerRank: null }).where(and(eq(songVersions.requestId, r.id), ne(songVersions.purchaseStatus, "paid")));
-  for (const [i, c] of ordered.entries()) await db.update(songVersions).set({ offered: true, offerRank: i }).where(eq(songVersions.id, c.id));
+    const rows = await tx
+      .select({ id: songVersions.id, score: songVersions.score, variantId: songVersions.variantId, slot: generations.slot, generationId: songVersions.generationId, selected: songVersions.selected })
+      .from(songVersions)
+      .innerJoin(generations, eq(songVersions.generationId, generations.id))
+      .where(and(eq(songVersions.requestId, r.id), eq(generations.lyricDraftId, draftId), eq(songVersions.status, "ready"), eq(songVersions.availability, "available")));
+    const picked = selectCandidates(
+      rows.map((x) => ({ ...x, score: x.score ?? 0, slot: x.slot ?? 0 })),
+      env.desiredCandidates,
+      env.candidateCollection,
+    );
+    const list = env.randomizeCandidateOrder ? shuffle(picked) : picked;
+    await tx.update(songVersions).set({ offered: false, offerRank: null }).where(and(eq(songVersions.requestId, r.id), ne(songVersions.purchaseStatus, "paid")));
+    for (const [i, c] of list.entries()) await tx.update(songVersions).set({ offered: true, offerRank: i }).where(eq(songVersions.id, c.id));
+    return { list, usable: rows.length };
+  });
+  if (!ordered) return;
   await logEvent(r.id, "status:preview_ready", {});
   await logEvent(r.id, "candidates:finalized", {
-    offered: ordered.map((c, i) => ({ id: c.id, variant: c.variantId, score: c.score, rank: i })),
-    usable: rows.length,
+    offered: ordered.list.map((c, i) => ({ id: c.id, variant: c.variantId, score: c.score, rank: i })),
+    usable: ordered.usable,
     randomized: env.randomizeCandidateOrder,
   });
 }
