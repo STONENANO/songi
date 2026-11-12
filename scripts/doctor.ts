@@ -86,6 +86,7 @@ async function checkKie() {
 async function checkStripe() {
   const s = env.stripe;
   out("info", "Stripe", `Song price: ${env.priceLabel} (SONG_PRICE_CENTS=${env.songPriceCents}, ${env.currency.toUpperCase()}).`);
+  if (!env.stripeEnabled) out("info", "Stripe", "Switched OFF (STRIPE_ENABLED=false): checkout uses the test button, nothing is charged. Set STRIPE_ENABLED=true for real payments.");
   if (!s.secretKey && !s.publishableKey) return out("info", "Stripe", "Not configured: checkout uses the test button (no real payments).");
   const missing = [["STRIPE_SECRET_KEY", s.secretKey], ["STRIPE_PUBLISHABLE_KEY", s.publishableKey], ["STRIPE_WEBHOOK_SECRET", s.webhookSecret]].filter(([, v]) => !v).map(([k]) => k);
   if (missing.length) out("fail", "Stripe", `Partly configured; missing ${missing.join(", ")}.`);

@@ -67,6 +67,25 @@ test("daily cap: new songs are refused once the site-wide limit for 24 hours is 
   else process.env.MAX_SONGS_PER_DAY = before;
 });
 
+test("the Stripe switch: off means test checkout even with keys; on needs the keys", async () => {
+  const { env } = await import("../../src/lib/env");
+  const names = ["STRIPE_ENABLED", "MOCK_PAYMENTS", "STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"] as const;
+  const keep = Object.fromEntries(names.map((k) => [k, process.env[k]]));
+  const set = (k: string, v: string | undefined) => (v === undefined ? delete (process.env as Record<string, string | undefined>)[k] : ((process.env as Record<string, string>)[k] = v));
+  set("MOCK_PAYMENTS", undefined);
+  set("STRIPE_SECRET_KEY", "sk_test_x");
+  set("STRIPE_PUBLISHABLE_KEY", "pk_test_x");
+  set("STRIPE_ENABLED", undefined);
+  assert.equal(env.mockPayments, true, "off by default");
+  set("STRIPE_ENABLED", "false");
+  assert.equal(env.mockPayments, true, "off");
+  set("STRIPE_ENABLED", "true");
+  assert.equal(env.mockPayments, false, "on, with keys: real payments");
+  set("STRIPE_SECRET_KEY", "");
+  assert.equal(env.mockPayments, true, "on, without keys: still the test checkout");
+  for (const k of names) set(k, keep[k]);
+});
+
 test("free downloads: the test checkout is closed on a live server unless FREE_DOWNLOADS is on", async () => {
   const { env } = await import("../../src/lib/env");
   const keep = { NODE_ENV: process.env.NODE_ENV, FREE_DOWNLOADS: process.env.FREE_DOWNLOADS };
