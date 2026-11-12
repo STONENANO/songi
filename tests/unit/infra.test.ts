@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { extractTracks, verifyKieSignature, verifyCallbackParams, callbackUrl, assertSafeAudioUrl } from "../../src/lib/kie/client";
 import { issueMediaToken, verifyMediaToken, deliveryToken, verifyDeliveryToken } from "../../src/lib/media/tokens";
-import { verifyShopifyHmac, signShopifyBody, songOrderIdFrom } from "../../src/lib/commerce/shopify";
+import { verifyEvent, signForTests } from "../../src/lib/commerce/stripe";
 import { initialTaskCount, canSubmitTask, selectCandidates } from "../../src/lib/pipeline/generation";
 import { scoreTrack } from "../../src/lib/pipeline/process";
 
@@ -55,14 +55,13 @@ test("media tokens expire, resist tampering, and preview tokens cannot reach ful
   assert.equal(verifyDeliveryToken(`${id}.nope`), null);
 });
 
-test("Shopify HMAC over the raw body; our order id is found on the order", () => {
-  const raw = JSON.stringify({ id: 1, line_items: [{ properties: [{ name: "_song_order_id", value: "abc" }] }] });
-  const sig = signShopifyBody(raw, "secret");
-  assert.equal(verifyShopifyHmac(raw, sig, "secret"), true);
-  assert.equal(verifyShopifyHmac(raw + " ", sig, "secret"), false);
-  assert.equal(verifyShopifyHmac(raw, sig, "other"), false);
-  assert.equal(songOrderIdFrom(JSON.parse(raw)), "abc");
-  assert.equal(songOrderIdFrom({ id: 2, note_attributes: [{ name: "_song_order_id", value: "def" }] }), "def");
+test("Stripe webhook signatures are checked over the raw body", () => {
+  const raw = JSON.stringify({ id: "evt_1", object: "event", type: "payment_intent.succeeded", data: { object: { id: "pi_1" } } });
+  const sig = signForTests(raw, "whsec_one");
+  assert.equal(verifyEvent(raw, sig, "whsec_one")?.id, "evt_1");
+  assert.equal(verifyEvent(raw + " ", sig, "whsec_one"), null, "tampered body");
+  assert.equal(verifyEvent(raw, sig, "whsec_two"), null, "wrong secret");
+  assert.equal(verifyEvent(raw, null, "whsec_one"), null, "no signature");
 });
 
 test("generation budget: initial tasks, caps and spend", () => {

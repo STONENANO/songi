@@ -171,4 +171,8 @@ CREATE TABLE IF NOT EXISTS feedback (
   note text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS feedback_request_idx ON feedback(request_id)
+CREATE INDEX IF NOT EXISTS feedback_request_idx ON feedback(request_id);
+
+-- Stripe payments (replaces Shopify checkout)
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id text;
+CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_pi_idx ON orders(stripe_payment_intent_id);

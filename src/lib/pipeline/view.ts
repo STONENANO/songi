@@ -147,9 +147,9 @@ export async function getRequestView(requestId: string, access: Access = "owner"
           ? { status: "paid_unfulfilled" as const, versionId: orderRows.find((o) => o.status === "paid_unfulfilled")!.versionId, deliveryLink: null }
           : null,
     feedback: lastFeedback ? { rating: lastFeedback.rating, wouldPay: lastFeedback.wouldPay, note: lastFeedback.note } : null,
-    priceLabel: env.freeDownloads ? "free while testing" : env.shopify.priceLabel,
+    priceLabel: env.freeDownloads ? "free while testing" : env.priceLabel,
     // The test-mode banner is for local development; a live test site never shows it.
-    mock: { llm: env.mockLlm, kie: env.mockKie, shopify: env.mockShopify, banner: !env.isProd },
+    mock: { llm: env.mockLlm, kie: env.mockKie, payments: env.mockPayments, banner: !env.isProd },
   };
 }
 export type RequestView = NonNullable<Awaited<ReturnType<typeof getRequestView>>>;

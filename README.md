@@ -1,6 +1,6 @@
 # Custom Song Studio (Songcraft v2)
 
-A personalised gift-song pipeline. A short quiz becomes a source-backed brief, the brief becomes verified lyrics, the lyrics become two or three musical versions through Kie.ai (Suno), and the customer previews, picks one, and buys it through Shopify.
+A personalised gift-song pipeline. A short quiz becomes a source-backed brief, the brief becomes verified lyrics, the lyrics become two or three musical versions through Kie.ai (Suno), and the customer previews, picks one, and buys it on our own checkout page (Stripe: card, Link, Apple Pay, Google Pay).
 
 See `docs/songcraft-v2-report.md` for the full design, decisions, costs and limitations.
 
@@ -18,7 +18,7 @@ With no keys, everything runs in free mock mode: placeholder lyrics, test-tone a
 |---|---|
 | `ANTHROPIC_API_KEY` | Real briefs, lyrics and verification |
 | `KIE_API_KEY` | Real Suno recordings (paid) |
-| `SHOPIFY_*` | Real checkout and payment webhooks |
+| `STRIPE_*` | Real payments on the custom checkout, and payment webhooks |
 | `MEDIA_SIGNING_SECRET` | Required in production |
 
 Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile includes ffmpeg.
@@ -34,10 +34,9 @@ Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile include
 | `ANTHROPIC_API_KEY` | console.anthropic.com → Settings → API keys |
 | `KIE_API_KEY` | kie.ai → API keys (needs credits for real recordings) |
 | `KIE_WEBHOOK_HMAC_KEY` | kie.ai → Settings (production only) |
-| `SHOPIFY_STORE_DOMAIN` | `your-store.myshopify.com` |
-| `SHOPIFY_STOREFRONT_TOKEN` | Shopify admin → Apps → Develop apps → your app → Storefront API access token |
-| `SHOPIFY_SONG_VARIANT_ID` | `gid://shopify/ProductVariant/<number>` of the song product |
-| `SHOPIFY_WEBHOOK_SECRET` | The same app's API secret key (signs webhooks) |
+| `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` | dashboard.stripe.com → Developers → API keys (use test keys first) |
+| `STRIPE_WEBHOOK_SECRET` | Developers → Webhooks → add `https://<domain>/api/webhooks/stripe` → signing secret (`whsec_…`). Locally: `stripe listen --forward-to localhost:4747/api/webhooks/stripe` |
+| `SONG_PRICE_CENTS` / `SONG_CURRENCY` | The price (default 3900 = $39, usd). Set on the server only |
 
 Add keys one at a time. With only `ANTHROPIC_API_KEY` set you get real lyrics and still spend nothing on music.
 
@@ -53,7 +52,7 @@ draft → briefing → (needs_input) → writing_lyrics → lyrics_ready
 2. **Lyrics** (`songcraft/lyrics.ts`, `validate.ts`, `arrangements.ts`). Chorus-first writer on a genre-appropriate arrangement; deterministic checks plus an independent Claude verifier; localized repair; explicit status. Only `verified` lyrics can be recorded.
 3. **Music direction** (`songcraft/direction.ts`, `registry.ts`, `style.ts`). Typed direction per version (intimate, signature, expressive), mood-aware, honouring the customer's sound notes; validated request, no truncation.
 4. **Versions** (`pipeline/generation.ts`, `process.ts`, `audio/qa.ts`). Two tasks in different styles for three versions; QA on every track; bounded follow-up on shortfall; idempotent, reconciled callbacks.
-5. **Preview and purchase** (`pipeline/view.ts`, `commerce/*`, `media/tokens.ts`). Private storage, signed preview links, persisted selection, Shopify checkout, verified webhooks, idempotent fulfilment, permanent delivery link.
+5. **Preview and purchase** (`pipeline/view.ts`, `commerce/*`, `media/tokens.ts`). Private storage, signed preview links, persisted selection, Stripe checkout, verified webhooks, idempotent fulfilment, permanent delivery link.
 
 ## Front end and re-skinning
 
@@ -93,7 +92,7 @@ The customer pages (quiz and song page) are built to be re-skinned without touch
    a reaction, "would you pay $45?", and a note. Fill it in with what they said.
 5. See every test song in one place at http://localhost:4747/admin?token=YOUR_ADMIN_TOKEN:
    lyrics, all takes (full audio), checker notes, cost and feedback.
-6. Checkout is in test mode until Shopify is connected: "Pay (test)" unlocks the download without charging.
+6. Checkout is in test mode until Stripe is connected: "Pay (test)" unlocks the download without charging.
 
 Each song costs roughly $0.50 to $0.80 in Claude calls (two first drafts, checks, sometimes a polish pass) plus two
 Kie tasks for three takes. Note your Kie credits before and after the first song.
@@ -102,5 +101,5 @@ Kie tasks for three takes. Note your Kie credits before and after the first song
 
 - Set `MEDIA_SIGNING_SECRET`, `KIE_WEBHOOK_SECRET` and `KIE_WEBHOOK_HMAC_KEY` (from kie.ai settings).
 - Use Postgres (`DATABASE_URL`) and private S3/R2 storage (`STORAGE_DRIVER=s3`).
-- In Shopify: create the song product, set `SHOPIFY_SONG_VARIANT_ID`, register webhooks `orders/paid`, `refunds/create`, `orders/cancelled` to `/api/webhooks/shopify`.
+- In Stripe: set `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`; add the webhook endpoint `/api/webhooks/stripe` for `payment_intent.succeeded`, `payment_intent.canceled`, `payment_intent.payment_failed`, `charge.refunded`; turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay.
 - Run on a long-running Node host; background work uses Next's `after()`.

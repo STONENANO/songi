@@ -195,35 +195,43 @@ export const env = {
     };
   },
 
-  /* ---------------- Shopify ---------------- */
-  get shopify() {
+  /* ---------------- Payments (Stripe) ---------------- */
+  get stripe() {
     return {
-      storeDomain: (process.env.SHOPIFY_STORE_DOMAIN ?? "").replace(/^https?:\/\//, "").replace(/\/$/, ""),
-      storefrontToken: process.env.SHOPIFY_STOREFRONT_TOKEN ?? "",
-      apiVersion: process.env.SHOPIFY_API_VERSION ?? "2026-10",
-      /** gid://shopify/ProductVariant/<n> of the "Custom song" product. */
-      songVariantId: process.env.SHOPIFY_SONG_VARIANT_ID ?? "",
-      webhookSecret: process.env.SHOPIFY_WEBHOOK_SECRET ?? "",
-      adminToken: process.env.SHOPIFY_ADMIN_TOKEN ?? "",
-      priceLabel: process.env.SONG_PRICE_LABEL ?? "$39",
+      secretKey: process.env.STRIPE_SECRET_KEY ?? "",
+      /** Sent to the browser for the Payment Element; safe to expose. */
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+      /** whsec_... from the webhook endpoint (or `stripe listen` locally). */
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
     };
   },
-  get mockShopify(): boolean {
-    const s = this.shopify;
-    return flag(process.env.MOCK_SHOPIFY) || !s.storeDomain || !s.storefrontToken || !s.songVariantId;
+  /** The song's price in the smallest currency unit. Set on the server only; the browser never sends a price. */
+  get songPriceCents(): number {
+    return num(process.env.SONG_PRICE_CENTS, 3900);
   },
-  /** Secret used to sign simulated webhooks in mock mode (never used when real Shopify is configured). */
-  mockShopifyWebhookSecret: "mock-shopify-webhook-secret",
+  get currency(): string {
+    return (process.env.SONG_CURRENCY ?? "usd").toLowerCase();
+  },
+  /** Shown on buttons and the checkout page, derived from the real price. */
+  get priceLabel(): string {
+    const amount = this.songPriceCents / 100;
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: this.currency.toUpperCase(), minimumFractionDigits: Number.isInteger(amount) ? 0 : 2 }).format(amount);
+  },
+  /** No Stripe keys: checkout uses the local test button instead of real payments. */
+  get mockPayments(): boolean {
+    const s = this.stripe;
+    return flag(process.env.MOCK_PAYMENTS) || !s.secretKey || !s.publishableKey;
+  },
   /**
-   * Test phase on a live server: no Shopify yet, so the checkout step unlocks the
-   * song for free. Only meaningful while Shopify is not configured.
+   * Test phase on a live server: no Stripe yet, so the checkout step unlocks the
+   * song for free. Only meaningful while Stripe is not configured.
    */
   get freeDownloads(): boolean {
-    return flag(process.env.FREE_DOWNLOADS) && this.mockShopify;
+    return flag(process.env.FREE_DOWNLOADS) && this.mockPayments;
   },
-  /** The test checkout page works locally, and on a live server only in free-download mode. */
+  /** The test checkout works locally, and on a live server only in free-download mode. */
   get testCheckoutAllowed(): boolean {
-    return this.mockShopify && (!this.isProd || this.freeDownloads);
+    return this.mockPayments && (!this.isProd || this.freeDownloads);
   },
   /** Site-wide cap on new songs per rolling 24 hours (protects the API bill). 0 = no cap. */
   get maxSongsPerDay(): number {
@@ -234,5 +242,8 @@ export const env = {
 export function assertSafeForProduction(): void {
   if (!env.isProd) return;
   if (env.kieWebhookSecret === "change-me") throw new Error("KIE_WEBHOOK_SECRET must be changed in production.");
+  // Live payments without a webhook secret would still unlock via the return page, but refunds and
+  // late confirmations would be missed: refuse to start half-configured.
+  if (!env.mockPayments && !env.stripe.webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET must be set when Stripe keys are configured.");
   void env.mediaSigningSecret;
 }
