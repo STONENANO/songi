@@ -156,3 +156,32 @@ test("best of two first drafts: both are written, the stronger verified one is k
   assert.equal(result.chosen.creativeScore, 9);
   assert.equal(result.chosen.status, "verified");
 });
+
+test("an unexpected song shape or hook type never fails the song; it is filed as other", async () => {
+  const { LyricsV3Schema, fromV3Lyrics, normalizeLabel } = await import("../../src/lib/songcraft/types");
+  const raw = {
+    title: "Rasheda",
+    sections: [{ tag: "Chorus", lines: ["Rasheda, this one is for you"] }],
+    factPlacement: [],
+    namePlacementNote: "",
+    arrangementId: "verse_chorus",
+    plan: {
+      thesis: "She was always the one.",
+      shape: "love_letter", // the kind of value that failed a live song
+      hookOptions: [{ kind: "callback", line: "kicked my chair", verdict: "ours" }, { kind: "Their Words", line: "we got this", verdict: "hers" }],
+      hookConcept: "we got this",
+      centralDetail: "f1 math class",
+      boxes: [{ section: "Verse 1", idea: "math class", factIds: ["f1"] }],
+      reframe: "r",
+      bridgeLine: "b",
+      payoff: "p",
+      ending: "e",
+    },
+  };
+  const parsed = LyricsV3Schema.safeParse(raw);
+  assert.ok(parsed.success, `the schema accepts an unknown label: ${JSON.stringify(parsed.error?.issues.map((i) => [i.path.join("."), i.message]))}`);
+  const plan = fromV3Lyrics(parsed.data).plan as unknown as { shape: string; hookOptions: { kind: string }[] };
+  assert.equal(plan.shape, "other");
+  assert.deepEqual(plan.hookOptions.map((h) => h.kind), ["other", "their_words"]);
+  assert.equal(normalizeLabel("Then and now", ["then_and_now"] as const), "then_and_now");
+});
