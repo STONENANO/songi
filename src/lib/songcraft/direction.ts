@@ -296,6 +296,9 @@ export function buildMusicDirection(input: DirectionInput): MusicDirection {
 
 type Segment = { text: string; required: boolean; dropPriority: number };
 
+/** Always in the style prompt: testers heard the beat drowning out the singer. */
+export const VOCAL_FORWARD = "vocal-forward mix, clear upfront lead vocal";
+
 /**
  * Render the style prompt in a fixed order: genre and arrangement, energy and
  * intent, vocal, instrumentation, production, dynamics, customer notes.
@@ -314,6 +317,8 @@ export function renderStyle(d: MusicDirection, limit: number): { style: string; 
     { text: d.core, required: true, dropPriority: 0 },
     { text: `${ENERGY_PHRASE[d.energy]}, ${d.emotionalIntent}`, required: true, dropPriority: 0 },
     { text: delivery ? `${vocalText}, ${delivery}` : vocalText, required: true, dropPriority: 0 },
+    // Suno tends to bury the voice under dense production; ask for a vocal-led mix early in the prompt.
+    { text: VOCAL_FORWARD, required: true, dropPriority: 0 },
     ...d.instrumentation.map((t, i) => ({ text: t, required: i < 2, dropPriority: 3 + i })),
     ...d.production.map((t, i) => ({ text: t, required: false, dropPriority: 6 + i })),
     ...d.dynamics.map((t, i) => ({ text: t, required: false, dropPriority: 10 + i })),

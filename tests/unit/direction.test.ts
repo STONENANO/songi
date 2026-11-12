@@ -1,7 +1,7 @@
 import "../setup";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GENRES, VOCAL_PRESETS, ARRANGEMENTS, genreArchetypes, buildMusicDirection, renderStyle, estimateDuration, buildKieInput, GenerationInputError, type Archetype } from "../../src/lib/songcraft";
+import { GENRES, VOCAL_PRESETS, ARRANGEMENTS, VOCAL_FORWARD, genreArchetypes, buildMusicDirection, renderStyle, estimateDuration, buildKieInput, GenerationInputError, type Archetype } from "../../src/lib/songcraft";
 
 const sung = "[Verse 1]\n" + "a line of words to sing here\n".repeat(20);
 const base = { genreKey: "country", arrangementId: "storytelling", archetype: "signature" as Archetype, mood: "heartfelt", relationship: "mom", occasion: "birthday", vocalGender: "f" as const, customStyle: null };
@@ -115,4 +115,22 @@ test("legacy direction mode reproduces the v1 style string (for A/B) without tru
   const r = buildKieInput({ genreKey: "country", vocalGender: "f", mood: "heartfelt", customStyle: null, title: "T", sungLyrics: sung, kieModel: "V6", directionMode: "legacy" });
   assert.match(r.input.style, /^modern country, acoustic and electric guitar/);
   assert.equal(r.direction, null);
+});
+
+test("every style prompt asks for a vocal-forward mix early, and keeps it even when space runs out", () => {
+  for (const g of Object.values(GENRES)) {
+    for (const a of genreArchetypes(g)) {
+      for (const gender of ["m", "f"] as const) {
+        const d = buildMusicDirection({ ...base, genreKey: g.key, arrangementId: g.arrangements[0], archetype: a, vocalGender: gender });
+        const { style } = renderStyle(d, 1000);
+        const at = style.indexOf(VOCAL_FORWARD);
+        assert.ok(at >= 0, `${g.key}/${a}/${gender}: ${style}`);
+        assert.ok(at < 200, `${g.key}/${a}: vocal-forward should come early (at ${at})`);
+        assert.doesNotMatch(style, /stacked harmonies|wide arena mix|big live drums|hard-hitting drums|massive choir/, `${g.key}/${a}`);
+        const tight = renderStyle(d, 320);
+        assert.ok(tight.style.includes(VOCAL_FORWARD), `${g.key}/${a}: kept under a tight limit`);
+        assert.ok(tight.style.length <= 320);
+      }
+    }
+  }
 });
