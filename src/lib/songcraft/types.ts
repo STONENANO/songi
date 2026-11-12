@@ -254,11 +254,17 @@ export const HOOK_KINDS = ["their_words", "parallel_phrase", "twist", "wish", "i
 
 export const SongPlanV3Schema = z.object({
   thesis: z.string().describe("The one feeling this song exists to say, in one sentence. Not a list of facts."),
-  shape: z.enum(SONG_SHAPES).describe("blessing = 'I hope / may you'; then_and_now = you were this and still are; never_said = the thank-you I owe you; joke_to_truth = the funny detail turns out to be the point; portrait = who you are, shown through scenes; other."),
+  // A free string, not an enum: the shape guides the writer but nothing downstream depends on it,
+  // so an unexpected label must never fail a song. fromV3Lyrics files unknown values as "other".
+  shape: z
+    .string()
+    .describe(
+      "One of: blessing = 'I hope / may you'; then_and_now = you were this and still are; never_said = the thank-you I owe you; joke_to_truth = the funny detail turns out to be the point; portrait = who you are, shown through scenes; other.",
+    ),
   hookOptions: z
     .array(
       z.object({
-        kind: z.enum(HOOK_KINDS),
+        kind: z.string().describe("One of: their_words, parallel_phrase, twist, wish, image."),
         line: z.string().describe("The hook line as it would be sung."),
         verdict: z.string().describe("One sentence: does only this story own it, does it compress the relationship, would a person actually say it, does it sing?"),
       }),
@@ -285,8 +291,18 @@ export const LyricsV3Schema = LyricsSchema.extend({ plan: SongPlanV3Schema });
 export type LyricsV3 = z.infer<typeof LyricsV3Schema>;
 
 /** Map a v3 draft onto the shared contract; the v3 plan fields ride along on plan. */
+/** Labels that only describe the plan: keep a known value, file anything else as "other". */
+export function normalizeLabel<T extends string>(value: string, allowed: readonly T[]): T | "other" {
+  const v = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return (allowed as readonly string[]).includes(v) ? (v as T) : "other";
+}
+
 export function fromV3Lyrics(v3: LyricsV3): Lyrics {
-  const p = v3.plan;
+  const p = {
+    ...v3.plan,
+    shape: normalizeLabel(v3.plan.shape, SONG_SHAPES),
+    hookOptions: v3.plan.hookOptions.map((h) => ({ ...h, kind: normalizeLabel(h.kind, HOOK_KINDS) })),
+  };
   const plan = {
     ...p,
     verseRoles: p.boxes.map((b) => `${b.section}: ${b.idea}${b.factIds.length ? ` [${b.factIds.join(", ")}]` : ""}`),
