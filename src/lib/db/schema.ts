@@ -146,9 +146,14 @@ export const orders = pgTable("orders", {
   checkoutUrl: text("checkout_url"),
   /** Stripe PaymentIntent paying for this order (pi_...). */
   stripePaymentIntentId: text("stripe_payment_intent_id"),
+  /** Stripe Checkout Session for this order (cs_...). Older orders have only a PaymentIntent. */
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
   /** Legacy columns from the removed Shopify checkout, kept so old rows still load. */
   shopifyOrderId: text("shopify_order_id"),
+  /** What was charged, tax included (the price until paid). */
   amountCents: integer("amount_cents"),
+  /** Tax collected by Stripe Tax on this order, in the smallest currency unit. */
+  taxCents: integer("tax_cents"),
   currency: text("currency"),
   error: text("error"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

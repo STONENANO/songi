@@ -100,8 +100,59 @@ async function checkStripe() {
       out("fail", "Stripe", `Secret key rejected: ${(e as Error).message}`);
     }
   }
-  out("info", "Stripe", `Webhook endpoint to add in Stripe: ${env.appUrl}/api/webhooks/stripe (events: payment_intent.succeeded, payment_intent.canceled, payment_intent.payment_failed, charge.refunded).`);
+  if (s.secretKey) await checkStripeTax();
+  out("info", "Stripe", `Webhook endpoint to add in Stripe: ${env.appUrl}/api/webhooks/stripe (events: ${STRIPE_EVENTS.join(", ")}).`);
 }
+
+const STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed", "payment_intent.payment_failed", "charge.refunded"];
+
+/**
+ * Stripe Tax collects nothing (and raises no error) without a head office address and an
+ * active registration where the buyer is, so check both, then run a real calculation.
+ */
+async function checkStripeTax() {
+  const s = env.stripe;
+  const label = "Stripe Tax";
+  try {
+    const settings = await stripe().tax.settings.retrieve();
+    const regs = (await stripe().tax.registrations.list({ status: "active", limit: 100 })).data;
+    const where = regs.map((r) => (r.country === "US" ? `US-${(r.country_options as { us?: { state?: string } }).us?.state ?? "?"}` : r.country)).join(", ");
+    if (!s.automaticTax) {
+      out("info", label, `Off (STRIPE_AUTOMATIC_TAX). Stripe settings: ${settings.status}${settings.head_office ? "" : ", no head office address"}; ${regs.length} active registration(s)${where ? ` (${where})` : ""}.`);
+      return;
+    }
+    if (settings.status !== "active") return out("fail", label, "STRIPE_AUTOMATIC_TAX is on but Stripe Tax is not active: add your head office address in Dashboard → Tax → Settings. Checkout will fail until then.");
+    if (!regs.length) return out("fail", label, "STRIPE_AUTOMATIC_TAX is on but there are no active registrations, so NO tax is collected anywhere. Add the places you're registered in Dashboard → Tax → Registrations.");
+    out("ok", label, `On. Tax code ${s.taxCode}, prices tax-${s.taxBehavior}. Collecting in: ${where}.`);
+    // A real calculation for the first registration, to prove the setup end to end.
+    const first = regs[0];
+    const state = (first.country_options as { us?: { state?: string } }).us?.state;
+    const sample = first.country === "US" ? SAMPLE_US[state ?? ""] : { country: first.country };
+    if (!sample) return out("info", label, `No sample address for ${where.split(", ")[0]}; run a test checkout from that place to confirm tax.`);
+    const calc = await stripe().tax.calculations.create({
+      currency: env.currency,
+      line_items: [{ amount: env.songPriceCents, reference: "song", tax_code: s.taxCode, tax_behavior: s.taxBehavior }],
+      customer_details: { address: sample, address_source: "billing" },
+    });
+    const reasons = [...new Set(calc.tax_breakdown.map((b) => b.taxability_reason))].join(", ");
+    if (reasons.includes("not_collecting")) out("fail", label, `Test calculation in ${where.split(", ")[0]} returned not_collecting: check the registration and tax code.`);
+    else out("ok", label, `Test calculation in ${where.split(", ")[0]}: tax ${calc.tax_amount_exclusive + calc.tax_amount_inclusive} on ${env.songPriceCents} (${reasons}). Confirm with your tax advisor that this is expected.`);
+  } catch (e) {
+    out("warn", label, `Could not read tax settings: ${(e as Error).message}`);
+  }
+}
+
+/** One real-looking address per common US registration state, for the test calculation. */
+const SAMPLE_US: Record<string, { country: string; state: string; postal_code: string; city: string; line1: string }> = {
+  CA: { country: "US", state: "CA", postal_code: "94103", city: "San Francisco", line1: "354 Oyster Point Blvd" },
+  NY: { country: "US", state: "NY", postal_code: "10001", city: "New York", line1: "350 5th Ave" },
+  TX: { country: "US", state: "TX", postal_code: "78701", city: "Austin", line1: "1100 Congress Ave" },
+  WA: { country: "US", state: "WA", postal_code: "98101", city: "Seattle", line1: "400 Pine St" },
+  FL: { country: "US", state: "FL", postal_code: "33131", city: "Miami", line1: "100 SE 2nd St" },
+  PA: { country: "US", state: "PA", postal_code: "19103", city: "Philadelphia", line1: "1500 Market St" },
+  IL: { country: "US", state: "IL", postal_code: "60601", city: "Chicago", line1: "233 S Wacker Dr" },
+  NJ: { country: "US", state: "NJ", postal_code: "07102", city: "Newark", line1: "1 Gateway Center" },
+};
 
 async function checkPlatform() {
   for (const bin of ["ffmpeg", "ffprobe"]) {

@@ -4,7 +4,8 @@ import { handleStripeWebhook } from "@/lib/commerce/orders";
 export const runtime = "nodejs";
 
 /**
- * Stripe webhooks: payment_intent.succeeded / .canceled / .payment_failed, charge.refunded.
+ * Stripe webhooks: checkout.session.completed / .async_payment_succeeded / .async_payment_failed,
+ * payment_intent.payment_failed, charge.refunded (and payment_intent.succeeded / .canceled for older orders).
  * The signature is checked over the raw body (STRIPE_WEBHOOK_SECRET).
  */
 export async function POST(req: Request) {

@@ -4,8 +4,10 @@
  * - The server decides what is bought and what it costs. The client only names a
  *   version id, which must belong to the caller's project and be on offer.
  * - Nothing is unlocked by a browser redirect alone. An order is paid only when
- *   Stripe says so: a signed webhook, or the PaymentIntent fetched from Stripe when
+ *   Stripe says so: a signed webhook, or the Checkout Session fetched from Stripe when
  *   the buyer returns from checkout. Amount, currency and our order id are checked.
+ * - Tax (Stripe Tax, when STRIPE_AUTOMATIC_TAX is on) is added by Stripe on top of the
+ *   price; we check the pre-tax subtotal against our price and record the tax.
  * - Fulfilment is idempotent: webhook deliveries are de-duplicated by event id,
  *   and the order row is claimed with a conditional update.
  */
@@ -17,7 +19,7 @@ import { getStorage } from "../storage";
 import { assertSafeAudioUrl } from "../kie/client";
 import { downloadToFile, normalizeToMp3 } from "../audio/ffmpeg";
 import { logEvent, setStatus } from "../pipeline/common";
-import { createIntent, retrieveIntent, verifyEvent, type Stripe } from "./stripe";
+import { createCheckoutSession, retrieveCheckoutSession, retrieveIntent, verifyEvent, type Stripe } from "./stripe";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -67,11 +69,11 @@ export type PreparedCheckout =
   | { kind: "paid" }
   | { kind: "closed"; reason: string }
   | { kind: "test"; free: boolean }
-  | { kind: "stripe"; clientSecret: string; publishableKey: string };
+  | { kind: "stripe"; clientSecret: string; publishableKey: string; tax: boolean; hasEmail: boolean };
 
 /**
- * What the checkout page needs for one order: a PaymentIntent client secret (created once,
- * then reused), the local test button in mock mode, or "already paid".
+ * What the checkout page needs for one order: a Checkout Session client secret (created once,
+ * then reused until it expires), the local test button in mock mode, or "already paid".
  */
 export async function prepareCheckout(order: Order): Promise<PreparedCheckout> {
   if (order.status === "paid" || order.status === "paid_unfulfilled") return { kind: "paid" };
@@ -79,18 +81,68 @@ export async function prepareCheckout(order: Order): Promise<PreparedCheckout> {
   if (env.mockPayments) return env.testCheckoutAllowed ? { kind: "test", free: env.freeDownloads } : { kind: "closed", reason: "payments_not_configured" };
 
   const db = await getDb();
-  if (order.stripePaymentIntentId) {
-    const pi = await retrieveIntent(order.stripePaymentIntentId);
-    if (pi.status === "succeeded") {
+  const stripeMode = (clientSecret: string, hasEmail: boolean): PreparedCheckout => ({
+    kind: "stripe",
+    clientSecret,
+    publishableKey: env.stripe.publishableKey,
+    tax: env.stripe.automaticTax,
+    hasEmail,
+  });
+  if (order.stripeCheckoutSessionId) {
+    const cs = await retrieveCheckoutSession(order.stripeCheckoutSessionId);
+    if (cs.status === "complete") {
+      // Paid (or an async method such as a bank debit is still settling: the webhook finishes it).
+      const result = await applyCompletedSession(cs);
+      return result === "fulfilled" || result === "already_paid" ? { kind: "paid" } : { kind: "closed", reason: cs.payment_status === "unpaid" ? "payment_processing" : result };
+    }
+    if (cs.status === "open" && cs.client_secret) return stripeMode(cs.client_secret, !!cs.customer_email);
+    // Expired: replace it below.
+  } else if (order.stripePaymentIntentId) {
+    // An order started before Checkout Sessions: if its PaymentIntent already succeeded, finish it.
+    const pi = await retrieveIntent(order.stripePaymentIntentId).catch(() => null);
+    if (pi?.status === "succeeded") {
       await applySucceededIntent(pi);
       return { kind: "paid" };
     }
-    if (pi.status !== "canceled" && pi.client_secret) return { kind: "stripe", clientSecret: pi.client_secret, publishableKey: env.stripe.publishableKey };
   }
   const [r] = await db.select({ email: songRequests.email, name: songRequests.recipientName }).from(songRequests).where(eq(songRequests.id, order.requestId)).limit(1);
-  const intent = await createIntent(order, { email: r?.email, description: `Custom song${r?.name ? ` for ${r.name}` : ""}` });
-  await db.update(orders).set({ stripePaymentIntentId: intent.id }).where(eq(orders.id, order.id));
-  return { kind: "stripe", clientSecret: intent.clientSecret, publishableKey: env.stripe.publishableKey };
+  const [v] = await db.select({ title: songVersions.title }).from(songVersions).where(eq(songVersions.id, order.versionId)).limit(1);
+  const forName = r?.name ? ` for ${r.name}` : "";
+  const cs = await createCheckoutSession(order, {
+    email: r?.email,
+    productName: v?.title ? `${v.title} (custom song)` : `Custom song${forName}`,
+    description: `Custom song${forName}: full song, MP3 download and a permanent link`,
+    replaces: order.stripeCheckoutSessionId,
+  });
+  await db.update(orders).set({ stripeCheckoutSessionId: cs.id }).where(eq(orders.id, order.id));
+  return stripeMode(cs.clientSecret, !!r?.email);
+}
+
+/** The fields we rely on from a Stripe Checkout Session (webhook payload or API response). */
+type SessionLike = Pick<Stripe.Checkout.Session, "id" | "status" | "payment_status" | "amount_subtotal" | "amount_total" | "currency" | "metadata" | "payment_intent" | "total_details">;
+
+/**
+ * Mark an order paid from a completed, paid Checkout Session, then fulfil it. Safe to call
+ * from the webhook and the return page at the same time: only one claim wins.
+ */
+export async function applyCompletedSession(cs: SessionLike): Promise<string> {
+  // A completed session can still be "unpaid" while a delayed method settles; wait for async_payment_succeeded.
+  if (cs.payment_status !== "paid") return `not_paid:${cs.payment_status}`;
+  const songOrderId = cs.metadata?.order_id;
+  if (!songOrderId || !/^[0-9a-f-]{36}$/i.test(songOrderId)) return "not_a_song_order";
+  const db = await getDb();
+  const [row] = await db.select().from(orders).where(eq(orders.id, songOrderId)).limit(1);
+  if (!row) return "unknown_song_order";
+  if (row.stripeCheckoutSessionId && row.stripeCheckoutSessionId !== cs.id) return "session_mismatch";
+  const expected = row.amountCents ?? env.songPriceCents;
+  const tax = cs.total_details?.amount_tax ?? 0;
+  // The price is checked before tax (tax is Stripe's to add); inclusive pricing keeps the subtotal at the price.
+  if ((cs.amount_subtotal ?? 0) < expected || cs.currency !== (row.currency ?? env.currency)) {
+    await logEvent(row.requestId, "order:amount_mismatch", { orderId: row.id, subtotal: cs.amount_subtotal, expected, currency: cs.currency });
+    return "amount_mismatch";
+  }
+  const piId = typeof cs.payment_intent === "string" ? cs.payment_intent : (cs.payment_intent?.id ?? null);
+  return markPaid(row, { paymentRef: piId ?? cs.id, paymentIntentId: piId, sessionId: cs.id, amountCents: cs.amount_total ?? expected, taxCents: tax, currency: cs.currency ?? env.currency });
 }
 
 /** The fields we rely on from a Stripe PaymentIntent (webhook payload or API response). */
@@ -107,16 +159,21 @@ export async function applySucceededIntent(pi: IntentLike): Promise<string> {
   const db = await getDb();
   const [row] = await db.select().from(orders).where(eq(orders.id, songOrderId)).limit(1);
   if (!row) return "unknown_song_order";
+  // Orders paid through a Checkout Session are settled by checkout.session.* events, not this one.
+  if (row.stripeCheckoutSessionId) return "handled_by_checkout_session";
   if (row.stripePaymentIntentId && row.stripePaymentIntentId !== pi.id) return "intent_mismatch";
   const expected = row.amountCents ?? env.songPriceCents;
   if (pi.amount_received < expected || pi.currency !== (row.currency ?? env.currency)) {
     await logEvent(row.requestId, "order:amount_mismatch", { orderId: row.id, received: pi.amount_received, expected, currency: pi.currency });
     return "amount_mismatch";
   }
-  return markPaid(row, pi.id, pi.amount_received, pi.currency);
+  return markPaid(row, { paymentRef: pi.id, paymentIntentId: pi.id, amountCents: pi.amount_received, currency: pi.currency });
 }
 
-async function markPaid(row: Order, paymentRef: string, amountCents: number, currency: string): Promise<string> {
+type Payment = { paymentRef: string; paymentIntentId: string | null; sessionId?: string; amountCents: number; taxCents?: number; currency: string };
+
+async function markPaid(row: Order, p: Payment): Promise<string> {
+  const { paymentRef, amountCents, currency } = p;
   const db = await getDb();
   if (row.status === "paid" || row.status === "paid_unfulfilled") return "already_paid";
   // A different order already paid for the same version (two checkouts, both paid): flag for refund, never fulfil twice.
@@ -124,11 +181,20 @@ async function markPaid(row: Order, paymentRef: string, amountCents: number, cur
   const newStatus = otherPaid ? "duplicate_payment" : "paid";
   const claimed = await db
     .update(orders)
-    .set({ status: newStatus, stripePaymentIntentId: paymentRef, amountCents, currency, paidAt: new Date(), error: otherPaid ? `Version already paid by order ${otherPaid.id}` : null })
+    .set({
+      status: newStatus,
+      stripePaymentIntentId: p.paymentIntentId,
+      ...(p.sessionId ? { stripeCheckoutSessionId: p.sessionId } : {}),
+      amountCents,
+      taxCents: p.taxCents ?? 0,
+      currency,
+      paidAt: new Date(),
+      error: otherPaid ? `Version already paid by order ${otherPaid.id}` : null,
+    })
     .where(and(eq(orders.id, row.id), eq(orders.status, "pending")))
     .returning();
   if (!claimed.length) return "already_processed";
-  await logEvent(row.requestId, newStatus === "paid" ? "order:paid" : "order:duplicate_payment", { orderId: row.id, paymentRef, amountCents });
+  await logEvent(row.requestId, newStatus === "paid" ? "order:paid" : "order:duplicate_payment", { orderId: row.id, paymentRef, amountCents, taxCents: p.taxCents ?? 0 });
   if (newStatus !== "paid") return "duplicate_payment";
   return fulfil(claimed[0]);
 }
@@ -141,9 +207,14 @@ export async function confirmFromReturn(orderId: string): Promise<Order | null> 
   const db = await getDb();
   const [row] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!row) return null;
-  if (row.status === "pending" && row.stripePaymentIntentId && !env.mockPayments) {
-    const pi = await retrieveIntent(row.stripePaymentIntentId).catch(() => null);
-    if (pi?.status === "succeeded") await applySucceededIntent(pi);
+  if (row.status === "pending" && !env.mockPayments) {
+    if (row.stripeCheckoutSessionId) {
+      const cs = await retrieveCheckoutSession(row.stripeCheckoutSessionId).catch(() => null);
+      if (cs?.status === "complete") await applyCompletedSession(cs);
+    } else if (row.stripePaymentIntentId) {
+      const pi = await retrieveIntent(row.stripePaymentIntentId).catch(() => null);
+      if (pi?.status === "succeeded") await applySucceededIntent(pi);
+    }
   }
   const [after] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   return after ?? null;
@@ -155,7 +226,7 @@ export async function payWithTestCheckout(orderId: string): Promise<string> {
   const db = await getDb();
   const [row] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!row) return "unknown_song_order";
-  return markPaid(row, `test_${row.id}`, env.freeDownloads ? 0 : (row.amountCents ?? env.songPriceCents), row.currency ?? env.currency);
+  return markPaid(row, { paymentRef: `test_${row.id}`, paymentIntentId: null, amountCents: env.freeDownloads ? 0 : (row.amountCents ?? env.songPriceCents), currency: row.currency ?? env.currency });
 }
 
 export type WebhookOutcome = { status: number; result: string };
@@ -169,13 +240,27 @@ export async function handleStripeWebhook(rawBody: string, headers: Headers): Pr
   if (!inserted.length) return { status: 200, result: "duplicate_delivery" };
   try {
     switch (event.type) {
+      // Fulfilment: card, Link and wallets complete as paid; delayed methods follow with async_payment_succeeded.
+      case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded":
+        return { status: 200, result: await applyCompletedSession(event.data.object) };
+      case "checkout.session.async_payment_failed": {
+        const cs = event.data.object;
+        const [row] = await db.select().from(orders).where(eq(orders.stripeCheckoutSessionId, cs.id)).limit(1);
+        if (row) await logEvent(row.requestId, "order:payment_failed", { orderId: row.id, reason: "async_payment_failed" });
+        return { status: 200, result: "payment_failed_logged" };
+      }
+      // Orders started before Checkout Sessions.
       case "payment_intent.succeeded":
         return { status: 200, result: await applySucceededIntent(event.data.object) };
       case "payment_intent.canceled":
         return { status: 200, result: await cancelPending(event.data.object.id) };
       case "payment_intent.payment_failed": {
         const pi = event.data.object;
-        const [row] = await db.select().from(orders).where(eq(orders.stripePaymentIntentId, pi.id)).limit(1);
+        // Checkout Session orders only learn their PaymentIntent once paid, so match on our order id too.
+        const orderId = pi.metadata?.order_id;
+        const match = orderId && /^[0-9a-f-]{36}$/i.test(orderId) ? eq(orders.id, orderId) : eq(orders.stripePaymentIntentId, pi.id);
+        const [row] = await db.select().from(orders).where(match).limit(1);
         if (row) await logEvent(row.requestId, "order:payment_failed", { orderId: row.id, reason: pi.last_payment_error?.code ?? "unknown" });
         return { status: 200, result: "payment_failed_logged" };
       }
