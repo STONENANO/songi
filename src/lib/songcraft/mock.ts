@@ -15,7 +15,9 @@ function sentences(text: string): string[] {
 
 export function mockBrief(input: QuizInput): Brief {
   const answers = Object.values(input.followUpAnswers ?? {}).join(" ");
-  const facts = sentences(`${input.story} ${answers}`).slice(0, 8).map((s, i) => ({
+  // Structured quiz stories arrive as Q/A blocks; keep only the answers.
+  const story = input.story.replace(/^Q:.*$/gm, "").replace(/^A:\s*/gm, "").replace(/^What I most want the song to say:\s*/gm, "");
+  const facts = sentences(`${story} ${answers}`).slice(0, 8).map((s, i) => ({
     type: /kitchen|house|lake|town|beach|road|park/i.test(s)
       ? ("place" as const)
       : /always|never|every/i.test(s)

@@ -1,0 +1,27 @@
+import { NextResponse } from "next/server";
+import { z } from "zod/v4";
+import { probeAnswer, mockProbe } from "@/lib/songcraft/probe";
+
+export const runtime = "nodejs";
+
+const Body = z.object({
+  recipientName: z.string().max(60).default(""),
+  relationship: z.string().max(40).default(""),
+  pronoun: z.enum(["she", "he", "they"]).default("they"),
+  question: z.string().max(300),
+  answer: z.string().min(1).max(2000),
+  isFollowUp: z.boolean().default(false),
+  fallbackDig: z.string().max(300).default(""),
+});
+
+/** Never fails the quiz: on any model error, fall back to the rule-based probe. */
+export async function POST(req: Request) {
+  const parsed = Body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ reaction: "", followUp: "", ingredients: [] });
+  try {
+    return NextResponse.json(await probeAnswer(parsed.data));
+  } catch (e) {
+    console.warn("[probe] falling back:", e instanceof Error ? e.message : e);
+    return NextResponse.json(mockProbe(parsed.data));
+  }
+}

@@ -2,8 +2,8 @@ node_modules
 .next
 .env
 .env.local
-storage/
-data/
+/storage/
+/data/
 *.log
 tsconfig.tsbuildinfo
 next-env.d.ts

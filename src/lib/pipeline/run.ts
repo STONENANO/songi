@@ -71,6 +71,9 @@ function toQuizInput(r: SongRequest): QuizInput {
     mood: r.mood,
     customStyle: r.customStyle,
     followUpAnswers: r.followUpAnswers,
+    giverName: r.giverName,
+    oneLine: r.oneLine,
+    leaveOut: r.leaveOut,
   };
 }
 
@@ -92,9 +95,17 @@ export async function runBriefing(requestId: string): Promise<void> {
       return;
     }
     await runLyrics(requestId, { source: "generated" });
+    await maybeAutoGenerate(requestId);
   } catch (e) {
     await fail(requestId, e);
   }
+}
+
+/** New funnel: start recording as soon as the first lyrics exist. Edits later trigger a free re-record. */
+async function maybeAutoGenerate(requestId: string) {
+  const r = await getRequest(requestId);
+  if (!r?.autoGenerate || r.status !== "lyrics_ready" || r.generationAttempts > 0) return;
+  await startGeneration(requestId);
 }
 
 export async function submitFollowUpAnswers(requestId: string, answers: Record<string, string>): Promise<void> {
@@ -141,7 +152,9 @@ export async function runLyrics(requestId: string, opts: { source: "generated" |
 /** Customer edited lines by hand. Verify, then store as a new draft. */
 export async function submitEditedLyrics(requestId: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const r = await getRequest(requestId);
-  if (!r?.brief || r.status !== "lyrics_ready") return { ok: false, error: "Lyrics cannot be edited right now." };
+  if (!r?.brief || !["lyrics_ready", "preview_ready", "failed"].includes(r.status)) {
+    return { ok: false, error: "Lyrics cannot be edited while the song is being written or recorded." };
+  }
   const parsed = parseEditedLyrics(text);
   if ("error" in parsed) return { ok: false, error: parsed.error };
   const profanity = findProfanity(text);
@@ -396,6 +409,11 @@ export async function getRequestView(requestId: string) {
     status: r.status,
     lastError: r.lastError,
     createdAt: r.createdAt,
+    /** When the current status began (status changes bump updatedAt). Drives wait-page progress. */
+    statusSince: r.updatedAt,
+    giverName: r.giverName,
+    autoGenerate: r.autoGenerate,
+    unlocked: r.unlocked,
     recipientName: r.recipientName,
     relationship: r.relationship,
     occasion: r.occasion,
@@ -406,7 +424,7 @@ export async function getRequestView(requestId: string) {
     generationAttempts: r.generationAttempts,
     maxGenerationAttempts: env.maxGenerationAttempts,
     brief: brief
-      ? { summary: brief.summary, facts: brief.facts, tone: brief.tone, recipient: brief.recipient, avoid: brief.avoid }
+      ? { summary: brief.summary, facts: brief.facts, tone: brief.tone, recipient: brief.recipient, avoid: brief.avoid, giverName: brief.giverName }
       : null,
     followUpQuestions: r.followUpQuestions ?? [],
     drafts: drafts.map((d) => ({
@@ -427,6 +445,7 @@ export async function getRequestView(requestId: string) {
         duration: v.duration,
         previewStart: v.previewStart,
         previewUrl: v.previewKey ? storage.publicUrl(v.previewKey) : null,
+        fullUrl: r.unlocked && v.audioKey ? storage.publicUrl(v.audioKey) : null,
         imageUrl: v.imageUrl,
         quality: v.quality,
       })),

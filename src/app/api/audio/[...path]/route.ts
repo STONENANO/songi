@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { getStorage, isSafeKey } from "@/lib/storage";
+import { getRequest } from "@/lib/pipeline/run";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ path: string[] 
   const { path: parts } = await ctx.params;
   const key = parts.join("/");
   if (!isSafeKey(key)) return new Response("Bad key", { status: 400 });
+  // Full songs are paid content: only serve them once the request is unlocked.
+  const full = key.match(/^requests\/([0-9a-f-]{36})\/versions\/[^/]+\/full\.mp3$/);
+  if (full) {
+    const r = await getRequest(full[1]).catch(() => null);
+    if (!r?.unlocked) return new Response("Locked", { status: 403 });
+  }
   const storage = await getStorage();
   const file = await storage.localPath(key).catch(() => null);
   if (!file || !fs.existsSync(file)) return new Response("Not found", { status: 404 });

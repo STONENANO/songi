@@ -91,4 +91,10 @@ export type QuizInput = {
   mood: string | null;
   customStyle: string | null;
   followUpAnswers?: Record<string, string> | null;
+  /** Who the song is from, e.g. "Philip". */
+  giverName?: string | null;
+  /** The one thing the giver wants the song to say. The emotional centre of the chorus. */
+  oneLine?: string | null;
+  /** Topics or words the giver asked us to keep out. */
+  leaveOut?: string | null;
 };

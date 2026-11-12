@@ -30,6 +30,8 @@ Useful scripts:
 | `npm run golden` | Runs brief extraction, lyrics, and the verifier over the six briefs in `scripts/golden/` and prints a scorecard. Run it every time a prompt or registry entry changes. Output lands in `data/golden-out/`. |
 | `npm run typecheck` | TypeScript check. |
 
+Quiz funnel events (step views, follow-ups shown/answered/skipped, submit) land in the `events` table via `POST /api/track`.
+
 ## How a request moves
 
 ```
@@ -37,12 +39,29 @@ draft → briefing → (needs_input) → writing_lyrics → lyrics_ready
       → generating → processing → preview_ready | failed
 ```
 
-1. **Quiz** (`/create`). Four steps: who and occasion, story, sound, email. Posts to `POST /api/requests`.
+1. **Story quiz** (`/create`). Three chapters, one question per screen: who it's for, their story, the sound. The buyer picks 2 or 3 story threads, answers one question per thread, and a fast model (`POST /api/probe`) asks at most one follow-up when an answer is vague. Answers are combined into `story` and posted to `POST /api/requests`. See `docs/story-capture-plan.md`.
 2. **Briefing** (`src/lib/songcraft/brief.ts`). Claude turns the raw story into a structured brief: name, phonetic respelling if needed, pronouns, typed and prioritised facts, tone, must-include phrases, an avoid list, and a one-line summary. If the story has fewer than three usable facts it returns up to two follow-up questions and the request pauses at `needs_input`. Lyrics are always written from the brief, never the raw text, which is the main defence against invented details.
 3. **Lyrics** (`src/lib/songcraft/lyrics.ts`). The lyricist writes to the genre's blueprint (section order, line counts, syllable range). A separate verifier call checks the draft against the brief for fact coverage, invented details, the name in the chorus, avoid-list violations, and singability. If it fails, one repair pass runs and the better draft is kept. Each draft stores two texts: the display lyrics the buyer reads and the sung lyrics Suno receives, where unusual names are respelled phonetically and digits are spelled out. The buyer can regenerate or edit lines; edits are re-verified.
 4. **Generation** (`src/lib/songcraft/style.ts`, `src/lib/kie/client.ts`). The Suno request is assembled from the genre registry, never from free text. Customer style notes are stripped of artist references first. Kie.ai returns two clips per request.
 5. **Processing** (`src/lib/pipeline/run.ts`, `src/lib/audio/*`). Each clip is downloaded, loudness-normalised, and checked: timestamped lyrics from Kie.ai are compared against the sung lyrics for coverage, and duration is checked for truncation. Failing clips are rejected. The preview is cut to start just before the first chorus that sings the recipient's name. If both clips fail, generation retries automatically up to `MAX_GENERATION_ATTEMPTS`.
-6. **Song page** (`/r/<id>`). Polls `GET /api/requests/<id>` every three seconds and renders the right view for the state: follow-up questions, lyrics with actions, generating, or two preview players.
+6. **Song page** (`/r/<id>`). Polls `GET /api/requests/<id>` every three seconds. Quiz requests record as soon as lyrics are written (`auto_generate`), so the buyer sees: writing → recording (wait page with video slot, progress, and their lyrics with story lines highlighted) → preview (two takes, unlock, change a line for a free re-record).
+
+## Front end and re-skinning
+
+The UI is built to be re-skinned without touching logic:
+
+| What | Where |
+|---|---|
+| Colours, fonts, radii, spacing, motion | `src/app/theme.css` (design tokens only) |
+| Shared UI pieces (tiles, chips, player, lyrics, bubbles…) | `src/components/ui/index.tsx` + `ui.css` |
+| Quiz behaviour / quiz screens | `src/app/create/use-quiz.ts` / `screens.tsx` |
+| Song page behaviour / views | `src/app/r/[id]/use-song.ts` / `song-view.tsx` |
+| All quiz copy, story threads, examples | `src/lib/onboarding/content.ts` |
+| Brand name, wait video, wait timing | `src/lib/brand.ts` (via `NEXT_PUBLIC_*` env vars) |
+
+Open `/dev/theme` to see every shared piece in its states on one page.
+
+Creators filming reaction videos can unlock the full song on the preview page with `CREATOR_UNLOCK_CODE`. Full-song audio is refused (403) until a request is unlocked.
 
 ## Project layout
 

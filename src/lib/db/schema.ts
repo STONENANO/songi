@@ -43,6 +43,18 @@ export const songRequests = pgTable("song_requests", {
   mood: text("mood"),
   customStyle: text("custom_style"),
   language: text("language").default("en").notNull(),
+  giverName: text("giver_name"),
+  oneLine: text("one_line"),
+  leaveOut: text("leave_out"),
+  feeling: text("feeling"),
+  neededBy: text("needed_by"),
+  phone: text("phone"),
+  /** Story quiz answers as entered, for analysis. The pipeline reads `story`. */
+  storyAnswers: jsonb("story_answers").$type<Record<string, unknown>[] | null>(),
+  /** Start recording as soon as lyrics are written (new funnel). */
+  autoGenerate: boolean("auto_generate").default(false).notNull(),
+  /** Full song unlocked (checkout or creator code). */
+  unlocked: boolean("unlocked").default(false).notNull(),
 
   // Agentic brief
   brief: jsonb("brief").$type<Record<string, unknown> | null>(),

@@ -87,3 +87,14 @@ CREATE TABLE IF NOT EXISTS cost_ledger (
   cost_usd numeric(10,4),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Story quiz v2
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS giver_name text;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS one_line text;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS leave_out text;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS feeling text;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS needed_by text;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS story_answers jsonb;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS auto_generate boolean NOT NULL DEFAULT false;
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS unlocked boolean NOT NULL DEFAULT false;

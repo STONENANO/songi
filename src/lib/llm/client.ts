@@ -36,15 +36,21 @@ export async function structured<S extends z.ZodTypeAny>(opts: {
   schema: S;
   system: string;
   user: string;
-  effort?: Effort;
+  /** Pass null to omit the effort setting (for models that do not support it). */
+  effort?: Effort | null;
   maxTokens?: number;
+  /** Override the default model, e.g. a fast model for interactive calls. */
+  model?: string;
 }): Promise<StructuredResult<z.infer<S>>> {
   const anthropic = getClient();
   const response = await anthropic.messages.parse({
-    model: env.llmModel,
+    model: opts.model ?? env.llmModel,
     max_tokens: opts.maxTokens ?? 8000,
     system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
-    output_config: { effort: opts.effort ?? "medium", format: zodOutputFormat(opts.schema) },
+    output_config: {
+      ...(opts.effort === null ? {} : { effort: opts.effort ?? "medium" }),
+      format: zodOutputFormat(opts.schema),
+    },
     messages: [{ role: "user", content: opts.user }],
   });
 
