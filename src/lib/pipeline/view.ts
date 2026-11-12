@@ -71,11 +71,27 @@ export async function getRequestView(requestId: string, access: Access = "owner"
   const validation = (current?.validation ?? null) as { issues?: IssueView[]; notes?: string[] } | null;
   const issues = (validation?.issues ?? []).filter((i) => i.severity !== "suggestion");
 
+  const quiz = (r.quizSnapshot ?? {}) as Record<string, unknown>;
+  // Which lyric lines carry which story detail, for highlighting on the song page.
+  const factById = new Map((brief?.facts ?? []).map((f) => [f.id, f]));
+  const storyLines = (current?.factPlacement ?? [])
+    .map((p) => {
+      const f = factById.get(p.factId);
+      return f ? { line: p.line, fact: f.text, quote: f.sourceQuote ?? "" } : null;
+    })
+    .filter((x): x is { line: string; fact: string; quote: string } => !!x);
+
   return {
     id: r.id,
     status: r.status,
     lastError: r.lastError,
     createdAt: r.createdAt,
+    /** When the current status began (status changes bump updatedAt). Drives wait-page progress. */
+    statusSince: r.updatedAt,
+    generationAttempts: r.generationAttempts,
+    /** Story-quiz projects record automatically once verified lyrics exist. */
+    autoRecord: quiz.autoRecord === true,
+    giverName: (typeof quiz.giverName === "string" && quiz.giverName) || brief?.giverName || "",
     access,
     recipientName: r.recipientName,
     relationship: r.relationship,
@@ -109,6 +125,7 @@ export async function getRequestView(requestId: string, access: Access = "owner"
           creativeScore: (current.creative as { weighted?: number } | null)?.weighted ?? null,
           arrangementId: current.arrangementId,
           source: current.source,
+          storyLines,
         }
       : null,
     draftCount: drafts.length,

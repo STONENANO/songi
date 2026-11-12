@@ -18,28 +18,47 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   page.on("pageerror", (e) => errors.push(e.message));
   const shot = async (n) => SHOTS && page.screenshot({ path: `${SHOTS}/${n}.png`, fullPage: true });
 
-  // 1. Quiz
+  // 1. Story quiz (one question per screen)
   await page.goto(`${BASE}/create`);
-  await page.fill('input[placeholder="Linda"]', "Linda");
-  await page.click('button.chip:has-text("Mom")');
-  await page.click('button.chip:has-text("Birthday")');
-  await page.click('button:has-text("Continue")');
-  await page.fill("textarea", "Mom taught me to make pancakes every Sunday. She sings off-key in the car on every road trip. Her happy place is the lake house in Michigan.");
-  await page.click('button:has-text("Continue")');
-  await page.click('button.chip:has-text("Country")');
-  await page.click('button.chip:has-text("Female")');
-  await page.click('button.chip:has-text("Heartfelt")');
-  await page.click('button:has-text("Continue")');
-  await page.click('button:has-text("Write my song")');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  const tap = (name) => page.getByRole("button", { name, exact: false }).first().click();
+  await tap("Mom");
+  await page.getByLabel("Their name").fill("Linda");
+  await tap("Continue");
+  await tap("Birthday");
+  await tap("Continue");
+  await tap("Let's do it");
+  await tap("Growing up");
+  await tap("Her favourite sayings");
+  await tap("Continue");
+  // A detailed answer: no follow-up needed.
+  await page.locator("textarea").first().fill("Mom taught me to make pancakes every Sunday. She sings off-key in the car on every road trip. Her happy place is the lake house in Michigan.");
+  await tap("Continue");
+  await page.waitForSelector("text=2 of 2", { timeout: 15000 });
+  // A thin answer: expect one dig-deeper follow-up, then answer it.
+  await page.locator("textarea").first().fill("She always says we got this.");
+  await tap("Continue");
+  await page.waitForSelector('button:has-text("Add to the song")', { timeout: 15000 });
+  await shot("e2e-0-followup");
+  await page.locator("textarea").nth(1).fill("She says it every time I call her before a big exam.");
+  await tap("Add to the song");
+  await page.waitForSelector("text=hard to say out loud", { timeout: 15000 });
+  await page.locator("textarea").first().fill("You made every ordinary Sunday feel like a holiday.");
+  await tap("Continue");
+  await tap("Cry happy tears");
+  await tap("Continue");
+  await tap("Country");
+  await tap("Female voice");
+  await tap("Continue");
+  await page.locator('input[type="email"]').fill("tester@example.com");
+  await tap("Write Linda's song");
   await page.waitForURL(/\/r\//);
   const songUrl = page.url();
   const id = songUrl.split("/r/")[1];
+  await shot("e2e-1-writing");
 
-  // 2. Verified lyrics, then record
-  await page.waitForSelector('button:has-text("Sing it"):not([disabled])', { timeout: 60000 });
-  assert.ok(await page.isVisible("text=checked"), "draft marked checked");
-  await shot("e2e-1-lyrics");
-  await page.click('button:has-text("Sing it")');
+  // 2. Story-quiz projects record as soon as verified lyrics exist (no "Sing it" step)
   await page.waitForSelector("text=versions. Pick the one", { timeout: 120000 });
   await shot("e2e-2-gallery");
 
@@ -63,12 +82,12 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   // 5. Select the second version (persists across reload), buy it
   const choose = page.locator('button:has-text("Choose this version")');
   await choose.nth(1).click();
-  await page.waitForSelector('[aria-checked="true"]');
+  await page.waitForSelector('button:has-text("✓ Selected")');
   await page.reload();
-  await page.waitForSelector('[aria-checked="true"]');
+  await page.waitForSelector('button:has-text("✓ Selected")');
   const chosenId = (await (await page.request.get(`${BASE}/api/requests/${id}`)).json()).candidates.find((c) => c.selected).id;
   assert.equal(chosenId, api.candidates[1].id, "selection persisted");
-  await page.click('button:has-text("Get the full song")');
+  await page.click('button:has-text("full song ·")');
   await page.waitForURL(/\/checkout\/mock\//);
   await shot("e2e-3-checkout");
   await page.click('button:has-text("Pay (test)")');

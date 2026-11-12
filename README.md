@@ -48,11 +48,27 @@ draft → briefing → (needs_input) → writing_lyrics → lyrics_ready
       → generating → processing → preview_ready → purchased | failed
 ```
 
+0. **Story quiz** (`/create`, `app/create/*`, `onboarding/*`). Three chapters, one question per screen: who it's for, their story, the sound. The buyer picks 2 or 3 story threads and answers one question each; a fast model (`POST /api/probe`, `PROBE_MODEL`) asks at most one follow-up when an answer is vague. Answers become the `story` as Q/A blocks; extras (the one line, feeling, leave-out, who it's from) are kept in `quiz_snapshot`. Quiz projects record automatically once verified lyrics exist (`autoRecord`). See `docs/story-capture-plan.md`.
 1. **Brief** (`songcraft/brief.ts`, `provenance.ts`). Claude extracts facts with the customer's exact supporting words; code verifies every quote, dedupes, ranks and caps facts. Thin stories get up to two follow-up questions, once.
 2. **Lyrics** (`songcraft/lyrics.ts`, `validate.ts`, `arrangements.ts`). Chorus-first writer on a genre-appropriate arrangement; deterministic checks plus an independent Claude verifier; localized repair; explicit status. Only `verified` lyrics can be recorded.
 3. **Music direction** (`songcraft/direction.ts`, `registry.ts`, `style.ts`). Typed direction per version (intimate, signature, expressive), mood-aware, honouring the customer's sound notes; validated request, no truncation.
 4. **Versions** (`pipeline/generation.ts`, `process.ts`, `audio/qa.ts`). Two tasks in different styles for three versions; QA on every track; bounded follow-up on shortfall; idempotent, reconciled callbacks.
 5. **Preview and purchase** (`pipeline/view.ts`, `commerce/*`, `media/tokens.ts`). Private storage, signed preview links, persisted selection, Shopify checkout, verified webhooks, idempotent fulfilment, permanent delivery link.
+
+## Front end and re-skinning
+
+The customer pages (quiz and song page) are built to be re-skinned without touching logic:
+
+| What | Where |
+|---|---|
+| Colours, fonts, spacing, motion | `src/app/theme.css` (design tokens only) |
+| Shared UI pieces (tiles, chips, player, lyrics, bubbles…) | `src/components/ui/` |
+| Quiz behaviour / screens | `src/app/create/use-quiz.ts` / `screens.tsx` |
+| Song page behaviour / views | `src/app/r/[id]/use-song.ts` / `song-view.tsx` |
+| All quiz wording, story threads, examples | `src/lib/onboarding/content.ts` |
+| Brand name, wait-page video, wait timing | `src/lib/brand.ts` (`NEXT_PUBLIC_BRAND_NAME`, `NEXT_PUBLIC_WAIT_VIDEO_URL`, `NEXT_PUBLIC_EST_RECORD_SECONDS`) |
+
+`/dev/theme` shows every shared piece in its states. Admin, test checkout and delivery pages keep the original dark styles (`app/legacy.css`, scoped under `.legacy`). Quiz funnel events go to the `events` table via `POST /api/track`.
 
 ## Commands
 

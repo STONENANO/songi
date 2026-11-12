@@ -34,7 +34,9 @@ function sentences(text: string): string[] {
 export function mockBriefLLM(input: QuizInput): BriefLLM {
   if (songcraftHooks.brief) return songcraftHooks.brief(input);
   const answers = Object.values(input.followUpAnswers ?? {}).filter((a) => a && a !== "(skipped)");
-  const sourceSentences = [...sentences(input.story), ...answers.flatMap(sentences)];
+  // Story-quiz stories arrive as Q/A blocks: only the answers are the customer's words.
+  const story = input.story.replace(/^Q:.*$/gm, "").replace(/^A:\s*/gm, "").replace(/^What I most want the song to say:\s*/gm, "");
+  const sourceSentences = [...sentences(story), ...answers.flatMap(sentences)];
   const generic = /\b(best|amazing|always there|wonderful|greatest)\b/i;
   const usable = sourceSentences.filter((s) => !(generic.test(s) && contentTokens(s).length < 6));
   const facts = sourceSentences.slice(0, 12).map((s, i) => {

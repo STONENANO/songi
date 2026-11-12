@@ -38,6 +38,11 @@ Follow-up questions
 - Ask 1 or 2 short, warm questions ONLY when there are fewer than 3 usable facts or the story is entirely generic ("she's the best mom ever"). Ask for a specific memory, a habit, a place, or an inside joke.
 - If follow-up answers are already included, never ask again: return an empty array.
 
+Story quiz answers
+- The story may arrive as question-and-answer pairs from a guided quiz. Treat the answers as the customer's words; the questions are only context.
+- "What I most want the song to say" is the emotional core the customer chose. Make it a priority-1 fact (type "wish" if it fits) and let it shape emotionalThesis.
+- If "Leave out" is given, put each item in avoid and never use it as a fact.
+
 summary: one friendly sentence the customer will see, e.g. "A warm folk song for your grandma Ruth about Saturday crosswords, the porch swing, and her banjo."`;
 
 export async function extractBrief(input: QuizInput): Promise<Brief> {
@@ -58,6 +63,8 @@ export async function extractBrief(input: QuizInput): Promise<Brief> {
       `Occasion: ${input.occasion.replace(/_/g, " ")}`,
       `Requested mood: ${input.mood ?? "(none)"}`,
       `Genre: ${input.genreKey}`,
+      `Song is from: ${input.giverName?.trim() || "(not given)"}`,
+      `Leave out: ${input.leaveOut?.trim() || "(nothing)"}`,
       ``,
       `The customer's story, verbatim:`,
       `"""`,
@@ -77,6 +84,11 @@ export async function extractBrief(input: QuizInput): Promise<Brief> {
     factCap: env.briefFactCap,
     maxPriority1: env.briefMaxPriority1,
   });
+  // The giver's explicit choices win over whatever the model inferred.
+  if (input.giverName?.trim() && !brief.giverName) brief.giverName = input.giverName.trim();
+  for (const item of (input.leaveOut ?? "").split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)) {
+    if (!brief.avoid.some((a) => a.toLowerCase() === item.toLowerCase())) brief.avoid.push(item);
+  }
   // Hard guarantees regardless of what the model did: never ask twice, never more than two.
   if (input.followUpAnswers) brief.followUpQuestions = [];
   brief.followUpQuestions = brief.followUpQuestions.slice(0, 2);
