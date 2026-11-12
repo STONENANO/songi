@@ -57,6 +57,11 @@ function useSections(view: RequestView) {
 export default function SongView({ id }: { id: string }) {
   const song = useSong(id);
   const { view, phase } = song;
+  // Once a song is bought, its home is the player page; this page is only for choosing and buying.
+  const songPage = view?.order?.status === "paid" ? view.order.deliveryLink : null;
+  useEffect(() => {
+    if (songPage) window.location.replace(songPage);
+  }, [songPage]);
 
   if (phase === "missing" || phase === "denied") {
     return (
@@ -69,7 +74,7 @@ export default function SongView({ id }: { id: string }) {
       </Screen>
     );
   }
-  if (!view) {
+  if (!view || songPage) {
     return (
       <Screen>
         <Note>Loading…</Note>

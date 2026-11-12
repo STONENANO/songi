@@ -1,0 +1,289 @@
+"use client";
+/**
+ * The song's permanent home: a music player with the cover, controls and lyrics that
+ * follow the singer. This is the page buyers come back to and share. All styling is
+ * in player.css and reads theme tokens (--player-*), so it re-skins with the rest.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { TimedSection } from "@/lib/onboarding/lyrics-view";
+import "./player.css";
+
+export type PlayerProps = {
+  title: string;
+  byline: string;
+  coverUrl: string | null;
+  src: string;
+  downloadHref: string;
+  sections: TimedSection[];
+  welcome: boolean;
+  recipient: string;
+  /** Known length in seconds, so the time shows before the audio loads. */
+  durationS?: number | null;
+};
+
+const fmt = (s: number) => {
+  if (!Number.isFinite(s) || s < 0) s = 0;
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+};
+
+export default function SongPlayer({ title, byline, coverUrl, src, downloadHref, sections, welcome, recipient, durationS }: PlayerProps) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [t, setT] = useState(0);
+  const [d, setD] = useState(durationS ?? 0);
+  const [coverOk, setCoverOk] = useState(!!coverUrl);
+  const [copied, setCopied] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(welcome);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const controlsRef = useRef<HTMLDivElement>(null);
+
+  // Flatten lines once so "which line is active" is a single index.
+  const lines = useMemo(() => sections.flatMap((s, si) => s.lines.map((l, li) => ({ ...l, key: `${si}-${li}` }))), [sections]);
+  const timed = lines.some((l) => l.start !== null);
+  const active = useMemo(() => {
+    if (!timed || (t === 0 && !playing)) return -1;
+    let idx = -1;
+    lines.forEach((l, i) => {
+      if (l.start !== null && l.start <= t + 0.3) idx = i;
+    });
+    return idx;
+  }, [lines, t, timed, playing]);
+
+  useEffect(() => {
+    const a = audio.current;
+    if (!a) return;
+    const on: [string, () => void][] = [
+      ["timeupdate", () => setT(a.currentTime)],
+      ["loadedmetadata", () => a.duration && setD(a.duration)],
+      ["durationchange", () => a.duration && setD(a.duration)],
+      ["play", () => setPlaying(true)],
+      ["pause", () => setPlaying(false)],
+      ["ended", () => setPlaying(false)],
+    ];
+    on.forEach(([e, f]) => a.addEventListener(e, f));
+    // timeupdate fires ~4x a second; a frame loop keeps the lyric highlight snappy while playing.
+    let raf = 0;
+    const tick = () => {
+      if (!a.paused) setT(a.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      on.forEach(([e, f]) => a.removeEventListener(e, f));
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Lock screen and headphone controls.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({ title, artist: byline, artwork: coverUrl ? [{ src: coverUrl, sizes: "512x512" }] : [] });
+  }, [title, byline, coverUrl]);
+
+  // Show a mini player once the main controls scroll away.
+  useEffect(() => {
+    const el = controlsRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setControlsVisible(e.isIntersecting), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const toggle = useCallback(() => {
+    const a = audio.current;
+    if (!a) return;
+    if (a.paused) void a.play();
+    else a.pause();
+  }, []);
+  const seekTo = useCallback((s: number, play = false) => {
+    const a = audio.current;
+    if (!a) return;
+    a.currentTime = Math.max(0, Math.min(s, a.duration || s));
+    setT(a.currentTime);
+    if (play && a.paused) void a.play();
+  }, []);
+
+  const share = async () => {
+    const url = window.location.href.split("?")[0];
+    const data = { title, text: `A song for ${recipient}`, url };
+    if (navigator.share) {
+      await navigator.share(data).catch(() => undefined);
+      return;
+    }
+    await navigator.clipboard?.writeText(url).catch(() => undefined);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2200);
+  };
+
+  return (
+    <div className="pl">
+      <audio ref={audio} src={src} preload="metadata" />
+
+      <header className="pl-top">
+        <button type="button" className="pl-icon" onClick={() => void share()} aria-label="Share this song">
+          <ShareIcon />
+        </button>
+        <span className="pl-top__label">{copied ? "Link copied" : `A song for ${recipient}`}</span>
+        <a className="pl-icon" href={downloadHref} download aria-label="Download MP3" title="Download MP3">
+          <DownloadIcon />
+        </a>
+      </header>
+
+      {showWelcome && (
+        <div className="pl-welcome" role="status">
+          <span>
+            <strong>It&apos;s yours.</strong> Receipt sent to your email.
+          </span>
+          <button type="button" className="pl-chip" onClick={() => void share()}>
+            Share
+          </button>
+          <button type="button" className="pl-icon pl-icon--sm" onClick={() => setShowWelcome(false)} aria-label="Dismiss">
+            ×
+          </button>
+        </div>
+      )}
+
+      <div className={`pl-cover${showWelcome ? " pl-cover--compact" : ""}`}>
+        {coverUrl && coverOk ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={coverUrl} alt="" onError={() => setCoverOk(false)} />
+        ) : (
+          <div className="pl-cover__fallback" aria-hidden>
+            <span>♪</span>
+            <small>{recipient}</small>
+          </div>
+        )}
+      </div>
+
+      <div className="pl-meta">
+        <h1 className="pl-title">{title}</h1>
+        <p className="pl-byline">{byline}</p>
+      </div>
+
+      <div className="pl-controls" ref={controlsRef}>
+        <input
+          className="pl-scrub"
+          type="range"
+          min={0}
+          max={d || 0}
+          step={0.1}
+          value={Math.min(t, d || 0)}
+          onChange={(e) => seekTo(Number(e.target.value))}
+          aria-label="Seek"
+          style={{ ["--pl-progress" as string]: `${d ? (t / d) * 100 : 0}%` }}
+        />
+        <div className="pl-times">
+          <span>{fmt(t)}</span>
+          <span>-{fmt(d - t)}</span>
+        </div>
+        <div className="pl-buttons">
+          <button type="button" className="pl-icon pl-icon--lg" onClick={() => seekTo(t - 10)} aria-label="Back 10 seconds">
+            <SkipIcon back />
+          </button>
+          <button type="button" className="pl-play" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+          <button type="button" className="pl-icon pl-icon--lg" onClick={() => seekTo(t + 10)} aria-label="Forward 10 seconds">
+            <SkipIcon />
+          </button>
+        </div>
+      </div>
+
+      {lines.length > 0 && <LyricsPanel sections={sections} active={active} timed={timed} onSeek={(s) => seekTo(s, true)} />}
+
+      <p className="pl-foot">Bookmark this page or save the link. It always plays and downloads {recipient}&apos;s song.</p>
+
+      <div className={`pl-mini${!controlsVisible && (playing || t > 0) ? " pl-mini--show" : ""}`} aria-hidden={controlsVisible}>
+        <div className="pl-mini__bar" style={{ width: `${d ? (t / d) * 100 : 0}%` }} />
+        <div className="pl-mini__row">
+          <div className="pl-mini__text">
+            <strong>{title}</strong>
+            <span>{active >= 0 ? lines[active].text : byline}</span>
+          </div>
+          <button type="button" className="pl-play pl-play--sm" onClick={toggle} aria-label={playing ? "Pause" : "Play"} tabIndex={controlsVisible ? -1 : 0}>
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LyricsPanel({ sections, active, timed, onSeek }: { sections: TimedSection[]; active: number; timed: boolean; onSeek: (s: number) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const lineEls = useRef<(HTMLElement | null)[]>([]);
+  const manualUntil = useRef(0);
+
+  // Keep the sung line about a third of the way down, unless the listener is scrolling.
+  useEffect(() => {
+    const el = lineEls.current[active];
+    const c = box.current;
+    if (!el || !c || Date.now() < manualUntil.current) return;
+    c.scrollTo({ top: el.offsetTop - c.clientHeight * 0.32, behavior: "smooth" });
+  }, [active]);
+
+  const userScrolled = () => {
+    manualUntil.current = Date.now() + 4000;
+  };
+
+  let n = -1;
+  return (
+    <section className="pl-lyrics" aria-label="Lyrics">
+      <div className="pl-lyrics__head">Lyrics</div>
+      <div className="pl-lyrics__scroll" ref={box} onWheel={userScrolled} onTouchMove={userScrolled}>
+        {sections.map((s, si) => (
+          <div key={si} className="pl-lyrics__section">
+            {s.tag && <div className="pl-lyrics__tag">{s.tag}</div>}
+            {s.lines.map((l, li) => {
+              n++;
+              const i = n;
+              const state = !timed ? "" : i === active ? " is-active" : active >= 0 && i < active ? " is-past" : "";
+              const cls = `pl-line${state}${l.source ? " is-story" : ""}`;
+              return timed && l.start !== null ? (
+                <button key={li} type="button" ref={(el) => void (lineEls.current[i] = el)} className={cls} onClick={() => onSeek(l.start!)}>
+                  {l.text}
+                </button>
+              ) : (
+                <p key={li} ref={(el) => void (lineEls.current[i] = el)} className={cls}>
+                  {l.text}
+                </p>
+              );
+            })}
+          </div>
+        ))}
+        <div className="pl-lyrics__end" />
+      </div>
+    </section>
+  );
+}
+
+const PlayIcon = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden>
+    <path d="M8 5.5v13a1 1 0 0 0 1.5.86l11-6.5a1 1 0 0 0 0-1.72l-11-6.5A1 1 0 0 0 8 5.5z" fill="currentColor" />
+  </svg>
+);
+const PauseIcon = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden>
+    <rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor" />
+    <rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor" />
+  </svg>
+);
+const DownloadIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />
+  </svg>
+);
+const ShareIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" />
+  </svg>
+);
+const SkipIcon = ({ back }: { back?: boolean }) => (
+  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={back ? undefined : { transform: "scaleX(-1)" }}>
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <path d="M3 4v5h5" />
+    <text x="12" y="15.5" textAnchor="middle" fontSize="7.5" fill="currentColor" stroke="none" fontFamily="system-ui" style={back ? undefined : { transform: "scaleX(-1)", transformOrigin: "12px 12px" }}>
+      10
+    </text>
+  </svg>
+);

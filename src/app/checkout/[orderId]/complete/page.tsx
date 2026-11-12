@@ -1,8 +1,8 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { confirmFromReturn } from "@/lib/commerce/orders";
 import { loadCheckout } from "@/lib/commerce/checkout-page";
 import { deliveryToken } from "@/lib/media/tokens";
-import { Button, Card, Checklist, Note, Screen, ScreenTitle } from "@/components/ui";
+import { Button, Note, Screen, ScreenTitle } from "@/components/ui";
 import Refresh from "./refresh";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /**
  * Post-purchase: where Stripe sends the buyer after paying. Confirms the payment with
  * Stripe directly (so it doesn't wait for the webhook), then hands over the song.
- * This is the place for post-purchase offers.
+ * A paid order goes straight to the song's player page (/d/<token>).
  */
 export default async function Complete({ params, searchParams }: { params: Promise<{ orderId: string }>; searchParams: Promise<{ redirect_status?: string }> }) {
   const { orderId } = await params;
@@ -21,26 +21,8 @@ export default async function Complete({ params, searchParams }: { params: Promi
   if (!order) notFound();
   const songPage = `/r/${c.request.id}`;
 
-  if (order.status === "paid") {
-    return (
-      <Screen>
-        <ScreenTitle eyebrow="Thank you" title={`${c.name}'s song is yours`} subtitle="Your receipt is on its way to your email." />
-        <Card>
-          <div className="ui-stack">
-            <Button block href={songPage}>
-              ▶ Listen and download
-            </Button>
-            <Button variant="secondary" block href={`/d/${deliveryToken(order.id)}`}>
-              Open the gift page to share
-            </Button>
-          </div>
-        </Card>
-        <Card tone="muted" title={`Ways to give it to ${c.name}`}>
-          <Checklist items={["Play it for them in person and film their reaction", "Send the gift page link in a message", "Save the MP3 to your phone for the car"]} />
-        </Card>
-      </Screen>
-    );
-  }
+  // Paid: straight to the song's permanent player page, with a one-time thank-you.
+  if (order.status === "paid") redirect(`/d/${deliveryToken(order.id)}?new=1`);
   if (order.status === "paid_unfulfilled") {
     return (
       <Screen>
