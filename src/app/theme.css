@@ -2,75 +2,106 @@
  * THEME. Every visual decision lives here as a design token.
  * To re-skin the product, change these values (and the files in /public/brand).
  * Components only ever reference var(--…) tokens; no colours or fonts are hard-coded elsewhere.
+ *
+ * Cryworthy · "Sunset Pop": a warm notebook page. Red melting into orange for the things
+ * you press and pick, periwinkle as the cool partner (chips, the story highlight), and blue
+ * tears to match the mascot. Rounded type, squishy buttons with a pressed edge, a little bounce.
  */
 :root {
   color-scheme: light;
 
   /* Colour */
-  --color-bg: #fbf7f2;
+  --color-bg: #fff9f5; /* warm paper */
   --color-surface: #ffffff;
-  --color-surface-muted: #f4ede4;
-  --color-border: #e8ddd0;
-  --color-border-strong: #d6c6b4;
-  --color-text: #2a211b;
-  --color-text-muted: #74665a;
-  --color-text-faint: #a39484;
+  --color-surface-muted: #fff0e8; /* peach wash */
+  --color-border: #f0e2dc;
+  --color-border-strong: #e2c9bf;
+  --color-text: #1f1420; /* ink, a touch plum */
+  --color-text-muted: #5e5160;
+  --color-text-faint: #a3949c;
 
-  --color-primary: #b4442e;
-  --color-primary-hover: #9c3925;
+  /* The sunset: buttons, the selected answer, play. Solid value for places that can't take a gradient (Stripe). */
+  --color-primary: #f2512c;
+  --color-primary-hover: #e0441f;
   --color-primary-ink: #ffffff;
-  --color-primary-soft: #f8e4dd;
+  --color-primary-deep: #c9301a; /* the pressed edge under squishy buttons */
+  --color-primary-soft: #fff0e8;
+  --gradient-primary: linear-gradient(135deg, #ff4b2b 0%, #ff8a2f 100%);
+  --gradient-primary-hover: linear-gradient(135deg, #ff5a38 0%, #ff9a45 100%);
 
-  --color-highlight: #fcefc4; /* lines built from the buyer's story */
-  --color-highlight-ink: #6b4e00;
+  --color-accent: #dc3d1c; /* text-safe tomato: notes, links, ticks */
+  --color-accent-bright: #ff9a3c;
+  --gradient-accent: linear-gradient(135deg, #ff4b2b 10%, #ff9a3c 90%);
+  --color-accent-soft: #ffe6dc;
+
+  --color-pop: #c8d2ff; /* periwinkle: chips, version pills */
+  --color-pop-ink: #1f1420;
+  --gradient-tear: linear-gradient(180deg, #9fb4ff 10%, #4d6bff 85%); /* tears, to match the blue mascot */
+
+  --color-highlight: #d9e0ff; /* periwinkle wash: lines built from the buyer's story */
+  --color-highlight-ink: #1f1420;
   --color-success: #2f7d55;
   --color-success-soft: #e3f3ea;
-  --color-danger: #b42318;
-  --color-warning-soft: #fff4d6;
+  --color-danger: #c0392b;
+  --color-warning-soft: #fff2be;
 
-  --color-glass: rgba(251, 247, 242, 0.72); /* floating button bar: see-through page background */
-  --color-glass-border: rgba(42, 33, 27, 0.08);
+  /* The notebook page */
+  --paper-rule: #f5e9e2; /* ruled lines */
+  --paper-rule-gap: 32px;
+  --paper-margin: #ffc2ad; /* the margin line, in peach */
+  --kraft: #c8a274;
+  --shadow-lift: 0 14px 22px -4px rgba(201, 48, 26, 0.12);
+
+  --color-glass: rgba(255, 249, 245, 0.8); /* floating button bar: see-through page background */
+  --color-glass-border: rgba(31, 20, 32, 0.08);
   --glass-blur: 14px;
 
-  --color-dark-surface: #231b16; /* studio card, footer bars */
-  --color-dark-ink: #f8f1e9;
+  --color-dark-surface: #1f1420; /* studio card */
+  --color-dark-ink: #fff9f5;
 
   /* Song page (the music player buyers keep and share) */
-  --player-bg: #1c1512;
-  --player-bg-glow: #7a2e1f; /* colour that fades down from the top */
-  --player-ink: #fbf3ea;
-  --player-ink-muted: rgba(251, 243, 234, 0.62);
-  --player-track: rgba(251, 243, 234, 0.22);
-  --player-accent: #fbf3ea; /* play button and progress */
-  --player-accent-ink: #1c1512;
-  --player-lyric-size: 26px;
-  --player-story-mark: rgba(251, 243, 234, 0.3); /* underline on lines built from the buyer's story */
+  --player-bg: #fff9f5;
+  --player-bg-glow: #ffe2d4; /* colour that fades down from the top */
+  --player-ink: #1f1420;
+  --player-ink-muted: rgba(31, 20, 32, 0.55);
+  --player-track: rgba(242, 81, 44, 0.16);
+  --player-accent: #f2512c; /* play button and progress (solid: used inside a gradient stop) */
+  --player-accent-ink: #ffffff;
+  --player-lyric-size: 27px;
+  --player-story-mark: #dc3d1c; /* pen underline on lines built from the buyer's story */
+  --player-active-mark: #d9e0ff; /* periwinkle wash on the line being sung */
 
   /* Type */
-  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
-  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-lyrics: var(--font-display);
+  --font-display: "Bricolage Grotesque", "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-lyrics: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-hand: "Kalam", "Segoe Print", "Bradley Hand", cursive; /* margin notes, written in pen */
   --text-xs: 12px;
   --text-sm: 14px;
   --text-md: 16px;
   --text-lg: 18px;
   --text-xl: 22px;
-  --text-2xl: 28px;
-  --text-3xl: 34px;
+  --text-2xl: 30px;
+  --text-3xl: 40px;
+  --text-hero: clamp(48px, 9vw, 104px);
   --weight-regular: 400;
-  --weight-medium: 500;
-  --weight-bold: 650;
-  --leading-tight: 1.15;
+  --weight-medium: 600; /* Bricolage reads best a step heavier */
+  --weight-bold: 700;
+  --leading-tight: 1.05;
   --leading-body: 1.5;
+  --tracking-display: -0.03em;
+  --tracking-body: -0.01em;
 
   /* Shape and depth */
   --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-md: 20px;
+  --radius-lg: 26px;
   --radius-pill: 999px;
-  --shadow-sm: 0 1px 2px rgba(42, 33, 27, 0.06);
-  --shadow-md: 0 6px 24px rgba(42, 33, 27, 0.08);
-  --shadow-focus: 0 0 0 3px rgba(180, 68, 46, 0.25);
+  --shadow-sm: 0 1px 2px rgba(31, 20, 32, 0.06);
+  --shadow-md: 0 10px 24px -6px rgba(31, 20, 32, 0.14);
+  --shadow-btn: 0 4px 0 var(--color-primary-deep); /* squishy: a pressed edge, not a blur */
+  --shadow-chunky: 0 3px 0 var(--color-border); /* resting tiles and cards */
+  --shadow-focus: 0 0 0 3px rgba(242, 81, 44, 0.3);
 
   /* Space and layout */
   --space-1: 4px;
@@ -81,10 +112,13 @@
   --space-6: 32px;
   --space-7: 48px;
   --content-width: 560px;
+  --page-width: 1120px;
   --tap-min: 48px;
 
   /* Motion */
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 150ms;
-  --duration-base: 250ms;
+  --duration-base: 300ms;
+  --duration-mark: 900ms; /* the highlight stroke */
 }

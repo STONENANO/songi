@@ -16,15 +16,16 @@ import {
   ErrorText,
   Field,
   Lyrics,
+  MascotStage,
   Note,
   ProgressBar,
   Screen,
   ScreenTitle,
   Stages,
-  StudioCard,
   TextArea,
   TrustRow,
   WaitVideo,
+  type MascotClip,
   type StageState,
 } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
@@ -116,9 +117,13 @@ function Writing({ view }: { view: RequestView }) {
     { label: "Checking every line against your story", state: state(lyricsDone, briefDone && t > 40) },
   ];
   const facts = view.brief?.facts ?? [];
+  const now = stages.find((x) => x.state === "active") ?? stages[stages.length - 1];
   return (
     <>
       <ScreenTitle eyebrow="Step 1 of 2" title={`Writing ${name}'s song`} subtitle="This takes about a minute. Then we record it." />
+      <div className="ui-mb">
+        <MascotStage clip="writing" label={now.label} />
+      </div>
       <Card>
         <Stages items={stages} />
       </Card>
@@ -137,14 +142,17 @@ function Writing({ view }: { view: RequestView }) {
 
 /* -------------------------------- recording -------------------------------- */
 
-function recordProgress(view: RequestView, elapsed: number): { value: number; label: string } {
+/** Where the recording is, as a progress value, a status line, and the mascot clip that acts it out. */
+function recordProgress(view: RequestView, elapsed: number): { value: number; label: string; clip: MascotClip } {
   const { name } = names(view);
   const g = view.generation;
   const readyShare = g.desired ? Math.min(1, g.usable / g.desired) : 0;
-  if (view.status === "processing") return { value: Math.max(0.9, 0.9 + 0.09 * readyShare), label: "Checking each recording" };
+  if (view.status === "processing") return { value: Math.max(0.9, 0.9 + 0.09 * readyShare), label: "Checking each recording", clip: "checking" };
   const v = Math.max(Math.min(0.9, elapsed / BRAND.estRecordSeconds), 0.9 * readyShare);
-  const label = v < 0.2 ? "Laying down the music" : v < 0.5 ? "Recording vocals" : v < 0.75 ? `Singing ${name}'s name in the chorus` : "Mixing and mastering";
-  return { value: v, label };
+  if (v < 0.2) return { value: v, label: "Laying down the music", clip: "music" };
+  if (v < 0.5) return { value: v, label: "Recording vocals", clip: "vocals" };
+  if (v < 0.75) return { value: v, label: `Singing ${name}'s name in the chorus`, clip: "name" };
+  return { value: v, label: "Mixing and mastering", clip: "mixing" };
 }
 
 function Recording({ view }: { view: RequestView }) {
@@ -153,20 +161,11 @@ function Recording({ view }: { view: RequestView }) {
   const progress = recordProgress(view, elapsed);
   const sections = useSections(view);
   const fromStory = storyLineCount(sections);
-  const messages = useMemo(() => {
-    const facts = (view.brief?.facts ?? []).filter((f) => f.priority <= 2).map((f) => f.text);
-    return [
-      `Recording ${name}'s song`,
-      ...facts.slice(0, 3).map((f) => `Singing about “${f.length > 60 ? f.slice(0, 57) + "…" : f}”`),
-      `Putting ${name}'s name in the chorus`,
-      `Laying down the ${view.genreLabel} groove`,
-    ];
-  }, [view.brief, view.genreLabel, name]);
 
   return (
     <>
       <ScreenTitle eyebrow="Step 2 of 2 · Recording now" title={`${name}'s song is being recorded`} />
-      {BRAND.waitVideoUrl ? <WaitVideo src={BRAND.waitVideoUrl} /> : <StudioCard messages={messages} sub={`${view.genreLabel} · written for ${name}`} />}
+      {BRAND.waitVideoUrl ? <WaitVideo src={BRAND.waitVideoUrl} /> : <MascotStage clip={progress.clip} label={progress.label} rec />}
       <div className="ui-mt ui-stack">
         <ProgressBar value={progress.value} label={progress.label} />
         <p className="ui-pointer">👇 Your free preview will appear right here</p>

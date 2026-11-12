@@ -58,7 +58,7 @@
   margin-top: var(--space-1);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
-  background: var(--player-track);
+  background: var(--color-highlight);
   font-size: var(--text-sm);
   animation: pl-in 400ms var(--ease-out);
 }
@@ -124,18 +124,32 @@
   font-family: var(--font-lyrics);
   font-size: var(--player-lyric-size);
   line-height: 1.25;
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-regular);
   color: var(--player-ink);
   transition: opacity 450ms var(--ease-out);
+}
+/* The line being sung gets swiped with the highlighter. */
+.pl-line > span {
+  background-image: linear-gradient(100deg, transparent 0.15em, var(--player-active-mark) 0.25em, var(--player-active-mark) calc(100% - 0.25em), transparent calc(100% - 0.1em));
+  background-repeat: no-repeat;
+  background-position: 0 80%;
+  background-size: 0% 60%;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 0 0.12em;
+  transition: background-size 700ms var(--ease-out);
+}
+.pl-line.is-active > span {
+  background-size: 100% 60%;
 }
 button.pl-line {
   cursor: pointer;
 }
-.pl-line.is-story {
-  text-decoration: underline;
+.pl-line.is-story > span {
+  text-decoration: underline wavy;
   text-decoration-color: var(--player-story-mark);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 6px;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 7px;
 }
 
 .pl-meta {
@@ -143,6 +157,7 @@ button.pl-line {
 }
 .pl-title {
   margin: 0;
+  letter-spacing: var(--tracking-display);
   font-family: var(--font-display);
   font-size: var(--text-2xl);
   line-height: var(--leading-tight);
@@ -150,8 +165,10 @@ button.pl-line {
 }
 .pl-byline {
   margin: var(--space-1) 0 0;
-  color: var(--player-ink-muted);
-  font-size: var(--text-md);
+  font-family: var(--font-hand);
+  color: var(--color-accent);
+  font-size: var(--text-lg);
+  letter-spacing: 0;
 }
 
 .pl-controls {
@@ -217,9 +234,10 @@ button.pl-line {
   height: 68px;
   border-radius: 50%;
   border: 0;
-  background: var(--player-accent);
+  background: var(--gradient-primary);
   color: var(--player-accent-ink);
   cursor: pointer;
+  box-shadow: var(--shadow-btn);
   transition: transform var(--duration-fast) var(--ease-out);
 }
 .pl-play:active {
