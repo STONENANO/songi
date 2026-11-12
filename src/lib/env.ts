@@ -16,6 +16,9 @@ function list(v: string | undefined, dflt: string[]): string[] {
   return v ? v.split(",").map((s) => s.trim()).filter(Boolean) : dflt;
 }
 
+/** Values copied from .env.example or docs that must never sign anything in production. */
+const PLACEHOLDER_SECRETS = new Set(["change-me", "changeme", "secret", "dev-only-media-secret", "dev-only-kie-secret"]);
+
 export const env = {
   get isProd(): boolean {
     return process.env.NODE_ENV === "production";
@@ -97,9 +100,14 @@ export const env = {
   get mockKie(): boolean {
     return flag(process.env.MOCK_KIE) || !this.kieApiKey;
   },
-  /** Shared secret used to sign our own callback URLs (per generation). */
+  /**
+   * Shared secret used to sign our own callback URLs (per generation). Required in production,
+   * where a missing or placeholder value would let anyone forge callbacks; a fixed value locally.
+   */
   get kieWebhookSecret(): string {
-    return process.env.KIE_WEBHOOK_SECRET ?? "change-me";
+    const s = process.env.KIE_WEBHOOK_SECRET ?? "";
+    if (this.isProd && (!s || PLACEHOLDER_SECRETS.has(s))) throw new Error("KIE_WEBHOOK_SECRET must be set to a random value in production.");
+    return s || "dev-only-kie-secret";
   },
   /** Kie.ai's webhookHmacKey (Settings page). When set, callbacks must carry a valid X-Webhook-Signature. */
   get kieWebhookHmacKey(): string {
@@ -257,15 +265,37 @@ export const env = {
   },
 };
 
-export function assertSafeForProduction(): void {
-  if (!env.isProd) return;
-  if (env.kieWebhookSecret === "change-me") throw new Error("KIE_WEBHOOK_SECRET must be changed in production.");
-  // Live payments without a webhook secret would still unlock via the return page, but refunds and
-  // late confirmations would be missed: refuse to start half-configured.
-  if (!env.mockPayments && !env.stripe.webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET must be set when STRIPE_ENABLED is on.");
-  if (env.storageDriver === "s3") {
-    const missing = (["bucket", "endpoint", "accessKeyId", "secretAccessKey"] as const).filter((k) => !env.s3[k]);
-    if (missing.length) throw new Error(`STORAGE_DRIVER=s3 needs S3_BUCKET, S3_ENDPOINT, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY (missing: ${missing.join(", ")}).`);
+/**
+ * Everything that must be set before a production server may take traffic. Empty outside
+ * production. Each entry is a sentence naming the setting, never its value.
+ */
+export function productionConfigProblems(): string[] {
+  if (!env.isProd) return [];
+  const problems: string[] = [];
+  const set = (k: string) => !!process.env[k]?.trim();
+  const placeholder = (k: string) => PLACEHOLDER_SECRETS.has(process.env[k]?.trim() ?? "");
+
+  // Signs preview, download and delivery links: without it every link is forgeable or broken.
+  if (!set("MEDIA_SIGNING_SECRET") || placeholder("MEDIA_SIGNING_SECRET")) problems.push("MEDIA_SIGNING_SECRET must be set to a long random value.");
+  // Signs our Kie callback URLs; the old default "change-me" is public.
+  if (!set("KIE_WEBHOOK_SECRET") || placeholder("KIE_WEBHOOK_SECRET")) problems.push("KIE_WEBHOOK_SECRET must be set to a long random value (not change-me).");
+  // With real Kie calls, also require Kie's own signature on every callback.
+  if (!env.mockKie && !set("KIE_WEBHOOK_HMAC_KEY")) problems.push("KIE_WEBHOOK_HMAC_KEY must be set (kie.ai > Settings > webhookHmacKey) when KIE_API_KEY is set.");
+  if (env.stripeEnabled && !flag(process.env.MOCK_PAYMENTS)) {
+    // The switch is on but the keys are missing: checkout would silently fall back to the test button.
+    const missing = ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"].filter((k) => !set(k) && !(k === "STRIPE_PUBLISHABLE_KEY" && set("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY")));
+    // Without the webhook secret, refunds and late payment confirmations are never processed.
+    if (missing.length) problems.push(`STRIPE_ENABLED is on but ${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} not set.`);
   }
-  void env.mediaSigningSecret;
+  if (env.storageDriver === "s3") {
+    const missing = ["S3_BUCKET", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"].filter((k) => !set(k));
+    if (missing.length) problems.push(`STORAGE_DRIVER=s3 needs ${missing.join(", ")}.`);
+  }
+  return problems;
+}
+
+/** Refuse to run a production server that is missing a required secret. Called once at startup. */
+export function assertSafeForProduction(): void {
+  const problems = productionConfigProblems();
+  if (problems.length) throw new Error(`Refusing to start: production settings are missing.\n- ${problems.join("\n- ")}`);
 }

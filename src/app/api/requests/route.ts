@@ -7,6 +7,7 @@ import { GENRES } from "@/lib/songcraft";
 import { runBriefing } from "@/lib/pipeline/run";
 import { newProjectToken, projectCookie, rateLimit, clientIp } from "@/lib/session/project";
 import { composeStory, StoryAnswerSchema } from "@/lib/onboarding/story";
+import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,9 @@ export async function POST(req: Request) {
   if (!rateLimit(`create:${clientIp(req)}`, env.isProd ? 8 : 200, 60 * 60_000)) {
     return NextResponse.json({ error: "Too many songs started from this connection. Please try again later." }, { status: 429 });
   }
-  const parsed = Body.safeParse(await req.json().catch(() => null));
+  const body = await readJson(req, BODY_LIMITS.create);
+  if (!body.ok) return body.response;
+  const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues.map((i) => i.message).join(" ") }, { status: 400 });
   const b = parsed.data;
   const fromQuiz = b.answers.length > 0;

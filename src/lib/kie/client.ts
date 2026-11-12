@@ -99,6 +99,14 @@ export function verifyCallbackParams(generationId: string | null, sig: string | 
   return expected.length === sig.length && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
 }
 
+/** Legacy callback URLs (tasks submitted before signed URLs) carried ?secret=. Constant-time compare. */
+export function verifyLegacySecret(secret: string | null): boolean {
+  if (!secret) return false;
+  const a = crypto.createHash("sha256").update(secret).digest();
+  const b = crypto.createHash("sha256").update(env.kieWebhookSecret).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 /** Kie.ai's documented webhook signature: base64(HMAC-SHA256(taskId + "." + timestamp, webhookHmacKey)). */
 export function verifyKieSignature(taskId: string, timestamp: string | null, signature: string | null, key: string, nowSec = Math.floor(Date.now() / 1000), maxSkewSec = 600): boolean {
   if (!timestamp || !signature || !key) return false;

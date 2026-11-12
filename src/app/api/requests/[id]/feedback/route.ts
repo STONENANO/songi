@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireProject } from "@/lib/http/guard";
 import { logEvent } from "@/lib/pipeline/common";
+import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const g = await requireProject(req, id);
   if (g instanceof NextResponse) return g;
-  const parsed = Body.safeParse(await req.json().catch(() => null));
+  const body = await readJson(req, BODY_LIMITS.small);
+  if (!body.ok) return body.response;
+  const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: "Pick a rating from 1 to 5." }, { status: 400 });
   const db = await getDb();
   let versionId = parsed.data.versionId ?? null;
