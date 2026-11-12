@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod/v4";
-import { submitFollowUpAnswers } from "@/lib/pipeline/run";
+import { runBriefing, submitFollowUpAnswers } from "@/lib/pipeline/run";
+import { checkAction, ALREADY_ON_IT } from "@/lib/pipeline/states";
 import { requireProject } from "@/lib/http/guard";
 
 export const runtime = "nodejs";
@@ -12,8 +13,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const g = await requireProject(req, id);
   if (g instanceof NextResponse) return g;
   const parsed = Body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid answers" }, { status: 400 });
-  if (g.r.status !== "needs_input") return NextResponse.json({ error: `Not waiting for answers (status ${g.r.status})` }, { status: 409 });
-  after(() => submitFollowUpAnswers(id, parsed.data.answers));
-  return NextResponse.json({ ok: true });
+  if (!parsed.success) return NextResponse.json({ error: "Please check your answers and try again." }, { status: 400 });
+  const check = checkAction("answer", g.r.status);
+  if (!check.ok) return check.already ? NextResponse.json({ ok: true, already: true, message: ALREADY_ON_IT }) : NextResponse.json({ error: check.message }, { status: 409 });
+  // Saves the answers and moves to "briefing" before replying; the writing runs after.
+  const outcome = await submitFollowUpAnswers(id, parsed.data.answers);
+  if (outcome === "started") after(() => runBriefing(id));
+  if (outcome === "not_waiting") return NextResponse.json({ error: "We're already working on your song. This page updates on its own." }, { status: 409 });
+  return NextResponse.json({ ok: true, already: outcome === "already" });
 }

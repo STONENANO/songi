@@ -2,7 +2,8 @@
  * The song pipeline, part 1: briefing and lyrics. Every exported function is
  * one state transition and is safe to call twice.
  *
- *  draft -> briefing -> (needs_input) -> writing_lyrics -> lyrics_ready
+ *  draft -> briefing -> writing_lyrics -> lyrics_ready
+ *  (needs_input is legacy: songs from before the quiz caught thin stories may still be waiting)
  *        -> generating -> processing -> preview_ready -> purchased | failed
  *
  * Generation and candidates live in generation.ts; the customer view in view.ts.
@@ -23,7 +24,8 @@ import {
   type DraftEval,
   type QuizInput,
 } from "../songcraft";
-import { logEvent, setStatus, failRequest, getRequest, recordLlmUsage } from "./common";
+import { logEvent, setStatus, failRequest, getRequest, recordLlmUsage, claimStatus } from "./common";
+import { ACTIONS } from "./states";
 
 export { getRequest } from "./common";
 import { startGeneration } from "./generation";
@@ -79,9 +81,13 @@ export async function runBriefing(requestId: string): Promise<void> {
       contradictions: brief.contradictions.length,
     });
 
+    // After the email the song never waits on the buyer. A thin story is written with what
+    // it has; the questions the brief would have asked are kept for the admin view only.
+    // (The quiz offers sentence starters before the email to make this rare.)
     if (brief.followUpQuestions.length && !r.followUpAnswers) {
-      await setStatus(requestId, "needs_input", { followUpQuestions: brief.followUpQuestions });
-      return;
+      const db = await getDb();
+      await db.update(songRequests).set({ followUpQuestions: brief.followUpQuestions }).where(eq(songRequests.id, requestId));
+      await logEvent(requestId, "brief:thin", { questions: brief.followUpQuestions.length });
     }
     await runLyrics(requestId, { source: "generated" });
     await maybeAutoRecord(requestId);
@@ -102,12 +108,16 @@ export async function maybeAutoRecord(requestId: string): Promise<void> {
   await logEvent(requestId, "generation:auto_record", result.ok ? { submitted: result.submitted } : { error: result.error });
 }
 
-export async function submitFollowUpAnswers(requestId: string, answers: Record<string, string>): Promise<void> {
+/**
+ * Save follow-up answers and start writing. The status moves to "briefing" in the same
+ * update, before this returns, so the song page shows "writing" on its very next check.
+ * Returns "already" when the answers were sent before (a double click or second tab).
+ */
+export async function submitFollowUpAnswers(requestId: string, answers: Record<string, string>): Promise<"started" | "already" | "not_waiting"> {
+  const claimed = await claimStatus(requestId, ACTIONS.answer.from, "briefing", { followUpAnswers: answers });
+  if (claimed) return "started";
   const r = await getRequest(requestId);
-  if (!r || r.status !== "needs_input") return;
-  const db = await getDb();
-  await db.update(songRequests).set({ followUpAnswers: answers, updatedAt: new Date() }).where(eq(songRequests.id, requestId));
-  await runBriefing(requestId);
+  return r && ACTIONS.answer.started.includes(r.status) ? "already" : "not_waiting";
 }
 
 /* ------------------------------- lyrics ---------------------------------- */

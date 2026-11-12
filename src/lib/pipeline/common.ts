@@ -1,5 +1,5 @@
 /** Shared pipeline helpers: events, status changes, cost and usage logging. */
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { RequestStatus, SongRequest } from "../db/schema";
 import type { LlmUsage } from "../llm/client";
@@ -15,6 +15,23 @@ export async function setStatus(requestId: string, status: RequestStatus, extra:
   const db = await getDb();
   await db.update(songRequests).set({ status, updatedAt: new Date(), ...extra }).where(eq(songRequests.id, requestId));
   await logEvent(requestId, `status:${status}`, extra.lastError ? { error: extra.lastError } : {});
+}
+
+/**
+ * Move to a new status only if the song is still in one of the expected ones, in a
+ * single update. Lets an API route record "started" before it replies and before the
+ * slow work runs in the background, and makes two simultaneous clicks start it once.
+ * Returns false when the status had already changed.
+ */
+export async function claimStatus(requestId: string, from: RequestStatus[], to: RequestStatus, extra: Partial<typeof songRequests.$inferInsert> = {}): Promise<boolean> {
+  const db = await getDb();
+  const rows = await db
+    .update(songRequests)
+    .set({ status: to, updatedAt: new Date(), ...extra })
+    .where(and(eq(songRequests.id, requestId), inArray(songRequests.status, from)))
+    .returning({ id: songRequests.id });
+  if (rows.length) await logEvent(requestId, `status:${to}`, {});
+  return rows.length > 0;
 }
 
 export async function failRequest(requestId: string, error: unknown) {

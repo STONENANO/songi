@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, fill, inferRelationship, isGentleOccasion, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
 import { beatFor, formatFor, ingredientsFor, isAnswered, type TopicAnswer } from "@/lib/onboarding/story-formats";
+import { boostersFor, isThin } from "@/lib/onboarding/depth";
 
 /** One line read back to the buyer before we write ("story beat"). */
 export type Beat = { key: string; topic: string; emoji: string; text: string; original: string; edited: boolean; gone: boolean };
@@ -29,6 +30,8 @@ export type QuizState = {
   oneLine: string;
   /** The open box: anything else they want in the song. */
   anythingElse: string;
+  /** Sentence-starter answers offered on "Last touches" when the story is thin, by starter key. */
+  boosters: Record<string, string>;
   /** Read-back edits and removals, by beat key. */
   beatEdits: Record<string, string>;
   beatGone: string[];
@@ -56,6 +59,7 @@ const EMPTY: QuizState = {
   topics: {},
   oneLine: "",
   anythingElse: "",
+  boosters: {},
   beatEdits: {},
   beatGone: [],
   feeling: "",
@@ -74,6 +78,8 @@ export const MIN_THREADS = 1;
 /** Shown as the recommendation; one is allowed so nobody gets stuck. */
 export const RECOMMENDED_THREADS = 2;
 const STORAGE_KEY = "story-quiz-v3";
+/** Read-back key prefix for sentence-starter answers. */
+const BOOSTER_PREFIX = "more_";
 /** Genre tile for "describe it yourself"; recorded as pop plus the buyer's description. */
 export const CUSTOM_GENRE = "custom";
 
@@ -261,6 +267,21 @@ export function useQuiz() {
 
   const answered = s.threads.filter((t) => isAnswered(formatFor(t), s.topics[t]));
 
+  // Thin-story check, before the email: offer two quick sentence starters on "Last touches"
+  // so the songwriter never has to come back with questions after the buyer has sent it.
+  const boosterList = useMemo(() => boostersFor(answered).map((b) => ({ ...b, starter: fill(b.starter, name, pronoun), placeholder: fill(b.placeholder, name, pronoun) })), [answered.join(","), name, pronoun]); // eslint-disable-line react-hooks/exhaustive-deps
+  const depthInput = { threads: s.threads, topics: s.topics, oneLine: s.oneLine, anythingElse: s.anythingElse, boosters: s.boosters };
+  /** Thin before any starter was filled: decides whether "Last touches" shows them (and keeps them shown). */
+  const thin = isThin({ ...depthInput, boosters: {} });
+  const stillThin = isThin(depthInput);
+  const setBooster = useCallback((key: string, value: string) => {
+    setS((p) => {
+      const beatKey = `${BOOSTER_PREFIX}${key}`;
+      const { [beatKey]: _drop, ...beatEdits } = p.beatEdits;
+      return { ...p, boosters: { ...p.boosters, [key]: value }, beatEdits };
+    });
+  }, []);
+
   /** The story read back to the buyer: one line per answered topic, plus the open box. */
   const beats: Beat[] = useMemo(() => {
     const list: Beat[] = [];
@@ -273,12 +294,20 @@ export function useQuiz() {
       const edit = s.beatEdits[key];
       list.push({ key, topic: fill(t.label, name, pronoun), emoji: t.emoji, text: edit ?? original, original, edited: edit !== undefined, gone: s.beatGone.includes(key) });
     }
+    for (const b of boosterList) {
+      const answer = (s.boosters[b.key] ?? "").trim();
+      if (!answer) continue;
+      const key = `${BOOSTER_PREFIX}${b.key}`;
+      const original = `${b.starter} ${answer.replace(/^\.{3}|…/, "")}`;
+      const edit = s.beatEdits[key];
+      list.push({ key, topic: "One more detail", emoji: "✨", text: edit ?? original, original, edited: edit !== undefined, gone: s.beatGone.includes(key) });
+    }
     if (s.anythingElse.trim()) {
       const edit = s.beatEdits[ANYTHING_ELSE];
       list.push({ key: ANYTHING_ELSE, topic: "Anything else", emoji: "📝", text: edit ?? s.anythingElse.trim(), original: s.anythingElse.trim(), edited: edit !== undefined, gone: s.beatGone.includes(ANYTHING_ELSE) });
     }
     return list;
-  }, [s.threads, s.topics, s.beatEdits, s.beatGone, s.anythingElse, name, pronoun]);
+  }, [s.threads, s.topics, s.beatEdits, s.beatGone, s.anythingElse, s.boosters, boosterList, name, pronoun]);
 
   const editBeat = useCallback((key: string, text: string) => setS((p) => ({ ...p, beatEdits: { ...p.beatEdits, [key]: text } })), []);
   const toggleBeat = useCallback(
@@ -303,7 +332,7 @@ export function useQuiz() {
   /** 0..5: how much real material we have. Drives the strength meter. */
   const strength = Math.min(
     5,
-    answered.length + Math.floor(ingredients.length / 3) + (s.oneLine.trim().length > 10 ? 1 : 0) + (s.anythingElse.trim().length > 20 ? 1 : 0),
+    answered.length + Math.floor(ingredients.length / 3) + (s.oneLine.trim().length > 10 ? 1 : 0) + (s.anythingElse.trim().length > 20 ? 1 : 0) + Object.values(s.boosters).filter((v) => v.trim().length > 5).length,
   );
 
   const submit = useCallback(async () => {
@@ -315,7 +344,12 @@ export function useQuiz() {
       .filter((b) => !b.gone && b.text.trim())
       .map((b) => ({
         thread: b.key,
-        question: b.key === ANYTHING_ELSE ? "Anything else to put in the song" : f(threadByKey(b.key)?.question ?? b.topic),
+        question:
+          b.key === ANYTHING_ELSE
+            ? "Anything else to put in the song"
+            : b.key.startsWith(BOOSTER_PREFIX)
+              ? (boosterList.find((x) => `${BOOSTER_PREFIX}${x.key}` === b.key)?.starter ?? "One more detail")
+              : f(threadByKey(b.key)?.question ?? b.topic),
         answer: b.text.trim(),
       }));
     const res = await fetch("/api/requests", {
@@ -348,7 +382,7 @@ export function useQuiz() {
     const id = (json as { id: string }).id;
     track(
       "quiz:submitted",
-      { threads: s.threads.length, answered: answered.length, ingredients: ingredients.length, strength, beatsEdited: beats.filter((b) => b.edited).length, beatsLeftOut: beats.filter((b) => b.gone).length, openBox: !!s.anythingElse.trim() },
+      { threads: s.threads.length, answered: answered.length, ingredients: ingredients.length, strength, beatsEdited: beats.filter((b) => b.edited).length, beatsLeftOut: beats.filter((b) => b.gone).length, openBox: !!s.anythingElse.trim(), thin, boostersFilled: Object.values(s.boosters).filter((v) => v.trim()).length, stillThin },
       id,
     );
     try {
@@ -357,7 +391,7 @@ export function useQuiz() {
       /* ignore */
     }
     router.push(`/r/${id}`);
-  }, [s, f, beats, answered.length, ingredients.length, strength, relationshipValue, occasionValue, router]);
+  }, [s, f, beats, answered.length, ingredients.length, strength, relationshipValue, occasionValue, router, boosterList, thin, stillThin]);
 
   return {
     s,
@@ -380,6 +414,10 @@ export function useQuiz() {
     ingredients,
     answered,
     strength,
+    thin,
+    stillThin,
+    boosterList,
+    setBooster,
     rel,
     isOtherRel,
     group,

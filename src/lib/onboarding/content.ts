@@ -319,3 +319,17 @@ export const DETAIL_EXAMPLES: Record<Group, { from: string; to: string }> = {
 };
 
 export const TRUST = ["About 2 minutes", "Free preview", "No card needed"];
+
+/**
+ * Quick sentence starters offered on "Last touches" when the story is still thin, so the
+ * songwriter has enough to work with and nobody is asked a question after the email.
+ * Each one aims at a kind of detail; `covers` lists the topics that already give that kind,
+ * so we never ask for what the buyer just told us.
+ */
+export const BOOSTERS: { key: string; starter: string; placeholder: string; covers: string[] }[] = [
+  { key: "moment", starter: "The moment with {name} I'll never forget:", placeholder: "the night we…", covers: ["how_met", "moment_knew", "memory", "hard_time", "proud"] },
+  { key: "only_them", starter: "{name} is the only person who", placeholder: "sings in the car with the windows down…", covers: ["little_things", "gives", "sayings", "inside_joke"] },
+  { key: "place", starter: "Our place is", placeholder: "the porch at Grandma's, where we…", covers: ["places", "traditions", "childhood"] },
+  { key: "laugh", starter: "{They} make me laugh when {they}", placeholder: "pretends not to know the words…", covers: ["laugh", "inside_joke", "kids_family"] },
+  { key: "future", starter: "Someday I want us to", placeholder: "finally take that trip to…", covers: ["future", "taught_me"] },
+];
