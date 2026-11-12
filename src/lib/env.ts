@@ -245,5 +245,9 @@ export function assertSafeForProduction(): void {
   // Live payments without a webhook secret would still unlock via the return page, but refunds and
   // late confirmations would be missed: refuse to start half-configured.
   if (!env.mockPayments && !env.stripe.webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET must be set when Stripe keys are configured.");
+  if (env.storageDriver === "s3") {
+    const missing = (["bucket", "endpoint", "accessKeyId", "secretAccessKey"] as const).filter((k) => !env.s3[k]);
+    if (missing.length) throw new Error(`STORAGE_DRIVER=s3 needs S3_BUCKET, S3_ENDPOINT, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY (missing: ${missing.join(", ")}).`);
+  }
   void env.mediaSigningSecret;
 }

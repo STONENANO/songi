@@ -14,6 +14,7 @@ import { spawnSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "../src/lib/env";
 import { stripe } from "../src/lib/commerce/stripe";
+import { checkBucket } from "../src/lib/storage";
 import { MODEL_CAPS } from "../src/lib/songcraft/style";
 
 type Level = "ok" | "warn" | "fail" | "info";
@@ -124,7 +125,13 @@ async function checkPlatform() {
       out("fail", "Database", `Postgres connection failed: ${(e as Error).message}`);
     }
   } else out("info", "Database", "No DATABASE_URL: using the built-in local database in ./data.");
+  await checkStorage();
   out("info", "Budget", `Up to ${env.desiredCandidates} versions per song, max ${env.maxTasksPerProject} tasks and ~$${env.maxEstSpendUsd.toFixed(2)} estimated generation spend per song.`);
+}
+
+async function checkStorage() {
+  const r = await checkBucket();
+  out(r.ok ? (env.storageDriver === "s3" ? "ok" : "info") : "fail", "Storage", env.storageDriver === "s3" ? r.message : `${r.message} Set STORAGE_DRIVER=s3 for Cloudflare R2.`);
 }
 
 async function main() {
