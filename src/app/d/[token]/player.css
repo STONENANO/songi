@@ -234,7 +234,7 @@ button.pl-line {
   height: 68px;
   border-radius: 50%;
   border: 0;
-  background: var(--player-accent);
+  background: var(--gradient-primary);
   color: var(--player-accent-ink);
   cursor: pointer;
   box-shadow: var(--shadow-btn);

@@ -9,11 +9,11 @@ export const metadata: Metadata = {
   description: "Description placeholder.",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#faf8f2" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#fff9f5" };
 
 // Brand faces (see --font-* in theme.css). Each token keeps a system fallback if these don't load.
 const FONTS =
-  "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter+Tight:wght@500;600&family=Instrument+Serif:ital@0;1&family=Kalam:wght@400;700&display=swap";
+  "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter+Tight:wght@500;600&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Serif:ital@0;1&family=Kalam:wght@400;700&display=swap";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
