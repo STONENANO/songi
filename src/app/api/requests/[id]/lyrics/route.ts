@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod/v4";
-import { runLyrics, submitEditedLyrics } from "@/lib/pipeline/run";
+import { runLyrics, submitEditedLyrics, maybeAutoRecord } from "@/lib/pipeline/run";
 import { requireProject } from "@/lib/http/guard";
 import { rateLimit } from "@/lib/session/project";
 
@@ -17,11 +17,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (g instanceof NextResponse) return g;
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  if (!["lyrics_ready", "preview_ready"].includes(g.r.status)) return NextResponse.json({ error: `Lyrics are not editable while status is ${g.r.status}` }, { status: 409 });
+  // A song that failed while writing lyrics can ask for new ones ("Try again" on the song page).
+  const retryAfterFailure = parsed.data.action === "regenerate" && g.r.status === "failed" && !!g.r.brief;
+  if (!["lyrics_ready", "preview_ready"].includes(g.r.status) && !retryAfterFailure) return NextResponse.json({ error: `Lyrics are not editable while status is ${g.r.status}` }, { status: 409 });
   if (!rateLimit(`lyrics:${id}`, 8, 60 * 60_000)) return NextResponse.json({ error: "You've asked for a lot of new lyrics. Please try again later." }, { status: 429 });
 
   if (parsed.data.action === "regenerate") {
-    after(() => runLyrics(id, { source: "regenerated" }));
+    after(async () => {
+      await runLyrics(id, { source: "regenerated" });
+      // Story-quiz songs that never got to record go straight on to recording, as they would have.
+      if (retryAfterFailure) await maybeAutoRecord(id);
+    });
     return NextResponse.json({ ok: true });
   }
   const result = await submitEditedLyrics(id, parsed.data.text);

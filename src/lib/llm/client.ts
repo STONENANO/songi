@@ -77,6 +77,21 @@ export async function structured<S extends z.ZodType>(opts: {
   /** Override the default model, e.g. a fast model for interactive calls. */
   model?: string;
 }): Promise<StructuredResult<z.infer<S>>> {
+  // A response that doesn't match the schema (e.g. a value outside an allowed list) is rare and
+  // usually doesn't repeat: ask once more before failing the whole song.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await structuredOnce(opts);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const schemaMiss = /Failed to parse structured output|did not match the schema/i.test(msg);
+      if (!schemaMiss || attempt >= 2) throw e;
+      console.warn(`[llm] ${opts.operation}: output did not match the schema, retrying once:`, msg.slice(0, 300));
+    }
+  }
+}
+
+async function structuredOnce<S extends z.ZodType>(opts: Parameters<typeof structured<S>>[0]): Promise<StructuredResult<z.infer<S>>> {
   const anthropic = getClient();
   // Streamed: large outputs (lyrics with adaptive thinking) exceed the SDK's non-streaming limit.
   // finalMessage() still returns the complete, schema-parsed response.

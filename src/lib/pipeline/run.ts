@@ -95,7 +95,7 @@ export async function runBriefing(requestId: string): Promise<void> {
  * buyer goes straight from the quiz to the wait page. Lyrics that need changes
  * stop here and the buyer sees them with the issues to fix.
  */
-async function maybeAutoRecord(requestId: string): Promise<void> {
+export async function maybeAutoRecord(requestId: string): Promise<void> {
   const r = await getRequest(requestId);
   if (!r || r.status !== "lyrics_ready" || r.generationAttempts > 0 || !quizExtras(r).autoRecord) return;
   const result = await startGeneration(requestId, { trigger: "customer" });
