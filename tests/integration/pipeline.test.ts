@@ -48,6 +48,23 @@ function stripeEvent(eventId: string, type: string, object: Record<string, unkno
   const raw = JSON.stringify({ id: eventId, object: "event", type, data: { object }, api_version: "2026-10-01", created: Math.floor(Date.now() / 1000), livemode: false, pending_webhooks: 1, request: null });
   return { raw, headers: new Headers({ "stripe-signature": signForTests(raw, "whsec_test_secret") }) };
 }
+/** A completed Checkout Session as Stripe sends it; tax is added on top of the price (exclusive). */
+function completedSession(orderId: string, csId: string, o: { subtotal?: number; tax?: number; paid?: boolean; pi?: string } = {}) {
+  const subtotal = o.subtotal ?? env.songPriceCents;
+  const tax = o.tax ?? 0;
+  return {
+    id: csId,
+    object: "checkout.session",
+    status: "complete",
+    payment_status: o.paid === false ? "unpaid" : "paid",
+    amount_subtotal: subtotal,
+    amount_total: subtotal + tax,
+    total_details: { amount_discount: 0, amount_shipping: 0, amount_tax: tax },
+    currency: env.currency,
+    payment_intent: o.pi ?? "pi_test_1",
+    metadata: { order_id: orderId },
+  };
+}
 function succeededIntent(orderId: string, piId: string, amount = env.songPriceCents) {
   return { id: piId, object: "payment_intent", status: "succeeded", amount_received: amount, currency: env.currency, metadata: { order_id: orderId } };
 }
@@ -206,22 +223,26 @@ test("selection persists; only the purchased version unlocks; duplicate and seco
   assert.ok((await getRequestView(id))!.candidates.every((c) => !c.downloadUrl));
   assert.equal((await getRequestView(id))?.order?.status, "pending");
 
-  // The checkout page attaches a PaymentIntent to the order (done by prepareCheckout with real keys).
+  // The checkout page attaches a Checkout Session to the order (done by prepareCheckout with real keys).
   const db0 = await getDb();
-  await db0.update(schema.orders).set({ stripePaymentIntentId: "pi_test_1" }).where(eq(schema.orders.id, co.orderId));
+  await db0.update(schema.orders).set({ stripeCheckoutSessionId: "cs_test_1" }).where(eq(schema.orders.id, co.orderId));
 
-  const bad = stripeEvent("evt_bad", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_test_1"));
+  const bad = stripeEvent("evt_bad", "checkout.session.completed", completedSession(co.orderId, "cs_test_1"));
   assert.equal((await handleStripeWebhook(bad.raw + " ", bad.headers)).status, 400, "tampered body rejected");
 
-  const short = stripeEvent("evt_short", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_test_1", 100));
-  assert.equal((await handleStripeWebhook(short.raw, short.headers)).result, "amount_mismatch", "underpayment never unlocks");
+  const short = stripeEvent("evt_short", "checkout.session.completed", completedSession(co.orderId, "cs_test_1", { subtotal: 100, tax: 3800 }));
+  assert.equal((await handleStripeWebhook(short.raw, short.headers)).result, "amount_mismatch", "tax can't make up for an underpriced song");
+  const unpaid = stripeEvent("evt_unpaid", "checkout.session.completed", completedSession(co.orderId, "cs_test_1", { paid: false }));
+  assert.equal((await handleStripeWebhook(unpaid.raw, unpaid.headers)).result, "not_paid:unpaid", "a delayed payment still settling never unlocks");
   assert.equal((await getRequestView(id))?.order?.status, "pending");
+  const legacy = stripeEvent("evt_pi", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_test_1"));
+  assert.equal((await handleStripeWebhook(legacy.raw, legacy.headers)).result, "handled_by_checkout_session", "the session's own PaymentIntent event doesn't double-process");
 
-  const w = stripeEvent("evt_1", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_test_1"));
+  const w = stripeEvent("evt_1", "checkout.session.async_payment_succeeded", completedSession(co.orderId, "cs_test_1", { tax: 351 }));
   assert.equal((await handleStripeWebhook(w.raw, w.headers)).result, "fulfilled");
   assert.equal((await handleStripeWebhook(w.raw, w.headers)).result, "duplicate_delivery");
-  const other = stripeEvent("evt_2", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_someone_else"));
-  assert.equal((await handleStripeWebhook(other.raw, other.headers)).result, "intent_mismatch", "a payment that isn't this order's never unlocks it");
+  const other = stripeEvent("evt_2", "checkout.session.completed", completedSession(co.orderId, "cs_someone_else"));
+  assert.equal((await handleStripeWebhook(other.raw, other.headers)).result, "session_mismatch", "a payment that isn't this order's never unlocks it");
   assert.equal(await payWithTestCheckout(co.orderId), "already_paid", "paying again is a no-op");
 
   const after = await getRequestView(id);
@@ -232,14 +253,17 @@ test("selection persists; only the purchased version unlocks; duplicate and seco
   const db = await getDb();
   const ords = await db.select().from(schema.orders).where(eq(schema.orders.requestId, id));
   assert.equal(ords.filter((o) => o.status === "paid").length, 1);
-  assert.equal(ords.find((o) => o.status === "paid")?.stripePaymentIntentId, "pi_test_1");
+  const paidOrder = ords.find((o) => o.status === "paid")!;
+  assert.equal(paidOrder.stripePaymentIntentId, "pi_test_1", "the PaymentIntent is recorded so refunds find the order");
+  assert.equal(paidOrder.taxCents, 351);
+  assert.equal(paidOrder.amountCents, env.songPriceCents + 351, "the amount is what was charged, tax included");
 
   // Full media: the paid version serves; an unpaid version's full file is refused even with a valid token.
   const paidRes = await mediaGET(new Request("http://x/"), { params: Promise.resolve({ token: paid[0].downloadUrl!.split("/").pop()! }) });
   assert.equal(paidRes.status, 200);
   assert.match(paidRes.headers.get("content-disposition") ?? "", /attachment/);
-  const unpaid = (await versionsFor(id)).find((x) => x.id === b.id)!;
-  const forged = issueMediaToken({ key: unpaid.audioKey!, kind: "full", ttlSec: 60, versionId: unpaid.id });
+  const unpaidVersion = (await versionsFor(id)).find((x) => x.id === b.id)!;
+  const forged = issueMediaToken({ key: unpaidVersion.audioKey!, kind: "full", ttlSec: 60, versionId: unpaidVersion.id });
   assert.equal((await mediaGET(new Request("http://x/"), { params: Promise.resolve({ token: forged }) })).status, 403);
 
   // Refund revokes access.
@@ -248,6 +272,24 @@ test("selection persists; only the purchased version unlocks; duplicate and seco
   assert.equal((await handleStripeWebhook(refund.raw, refund.headers)).result, "refunded");
   const tok = paid[0].downloadUrl!.split("/").pop()!;
   assert.equal((await mediaGET(new Request("http://x/"), { params: Promise.resolve({ token: tok }) })).status, 403);
+});
+
+test("orders started before Checkout Sessions still settle from their PaymentIntent", async () => {
+  const id = await project({ recipientName: "June", relationship: "mom" });
+  await runBriefing(id);
+  await startGeneration(id);
+  const v = await untilSettled(id);
+  const co = await startCheckout(id, v!.candidates[0].id);
+  assert.ok(co.ok);
+  if (!co.ok) return;
+  const db = await getDb();
+  await db.update(schema.orders).set({ stripePaymentIntentId: "pi_legacy_1" }).where(eq(schema.orders.id, co.orderId));
+  const short = stripeEvent("evt_legacy_short", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_legacy_1", 100));
+  assert.equal((await handleStripeWebhook(short.raw, short.headers)).result, "amount_mismatch");
+  const other = stripeEvent("evt_legacy_other", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_someone_else"));
+  assert.equal((await handleStripeWebhook(other.raw, other.headers)).result, "intent_mismatch");
+  const w = stripeEvent("evt_legacy_1", "payment_intent.succeeded", succeededIntent(co.orderId, "pi_legacy_1"));
+  assert.equal((await handleStripeWebhook(w.raw, w.headers)).result, "fulfilled");
 });
 
 test("a version from another project cannot be selected or bought", async () => {

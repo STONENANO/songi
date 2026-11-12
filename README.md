@@ -35,8 +35,9 @@ Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile include
 | `KIE_API_KEY` | kie.ai → API keys (needs credits for real recordings) |
 | `KIE_WEBHOOK_HMAC_KEY` | kie.ai → Settings (production only) |
 | `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` | dashboard.stripe.com → Developers → API keys (use test keys first) |
-| `STRIPE_WEBHOOK_SECRET` | Developers → Webhooks → add `https://<domain>/api/webhooks/stripe` → signing secret (`whsec_…`). Locally: `stripe listen --forward-to localhost:4747/api/webhooks/stripe` |
+| `STRIPE_WEBHOOK_SECRET` | Developers → Webhooks → add `https://<domain>/api/webhooks/stripe` → signing secret (`whsec_…`). Locally: `stripe listen --forward-to localhost:4747/api/webhooks/stripe` (Stripe CLI: `npm i -g @stripe/cli`) |
 | `SONG_PRICE_CENTS` / `SONG_CURRENCY` | The price (default 3900 = $39, usd). Set on the server only |
+| `STRIPE_AUTOMATIC_TAX` / `STRIPE_TAX_CODE` / `STRIPE_TAX_BEHAVIOR` | Stripe Tax. See "Stripe Tax" below before turning it on |
 
 Add keys one at a time. With only `ANTHROPIC_API_KEY` set you get real lyrics and still spend nothing on music.
 
@@ -100,9 +101,20 @@ The customer pages (quiz and song page) are built to be re-skinned without touch
 Each song costs roughly $0.50 to $0.80 in Claude calls (two first drafts, checks, sometimes a polish pass) plus two
 Kie tasks for three takes. Note your Kie credits before and after the first song.
 
+## Stripe Tax
+
+Checkout is a Stripe Checkout Session shown inside our page (`ui_mode: "elements"`), so turning on tax is one setting: `automatic_tax`. When `STRIPE_AUTOMATIC_TAX=true`, the checkout adds an address form, and Stripe works out the tax from that address and adds it on top of the price (`STRIPE_TAX_BEHAVIOR=exclusive`). Stripe also records each sale for tax reports and reverses the tax on refunds. Before turning it on:
+
+1. Dashboard → **Tax** → **Settings**: add your head office address. Until you do, Stripe refuses checkouts that ask for tax.
+2. Dashboard → **Tax** → **Registrations**: add every place you are already registered to collect tax. **With no registration, Stripe collects $0 and shows no error.** Adding one in Stripe does not register you with the tax authority. Stripe's "Register for me" can do that for eligible US remote sellers. **Locations → Needs attention** shows where you may be getting close to a threshold.
+3. Check the product tax code. The default, `txcd_10401100` (Digital Audio Works, downloaded, permanent rights), matches an MP3 the buyer keeps. Confirm it with your tax advisor ([tax codes](https://docs.stripe.com/tax/tax-codes)).
+4. `npm run doctor` with `STRIPE_AUTOMATIC_TAX=true`: it checks steps 1 and 2 and runs a real test calculation.
+
+Sandbox and live mode keep separate tax settings and registrations, so do steps 1 and 2 in both.
+
 ## Production checklist
 
 - Set `MEDIA_SIGNING_SECRET`, `KIE_WEBHOOK_SECRET` and `KIE_WEBHOOK_HMAC_KEY` (from kie.ai settings).
 - Use Postgres (`DATABASE_URL`) and private S3/R2 storage (`STORAGE_DRIVER=s3`).
-- In Stripe: set `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`; add the webhook endpoint `/api/webhooks/stripe` for `payment_intent.succeeded`, `payment_intent.canceled`, `payment_intent.payment_failed`, `charge.refunded`; turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay.
+- In Stripe: set `STRIPE_SECRET_KEY` (a restricted `rk_live_` key is safer), `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`. Add the webhook endpoint `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed` and `charge.refunded`. Add `payment_intent.succeeded` and `payment_intent.canceled` too while orders from before this change are still open. Turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay. To collect tax, follow "Stripe Tax" above in live mode.
 - Run on a long-running Node host; background work uses Next's `after()`.

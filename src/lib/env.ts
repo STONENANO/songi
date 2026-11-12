@@ -203,6 +203,16 @@ export const env = {
       publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
       /** whsec_... from the webhook endpoint (or `stripe listen` locally). */
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+      /**
+       * Stripe Tax on the checkout (automatic_tax). Off until Tax is set up in Stripe:
+       * a head office address and at least one active registration. Without a registration,
+       * Stripe silently collects no tax, so `npm run doctor` checks both.
+       */
+      automaticTax: flag(process.env.STRIPE_AUTOMATIC_TAX),
+      /** Product tax code for the song. Default: Digital Audio Works, downloaded, permanent rights. Confirm with your tax advisor. */
+      taxCode: process.env.STRIPE_TAX_CODE || "txcd_10401100",
+      /** exclusive = tax is added on top of the price (usual in the US); inclusive = the price already contains tax. */
+      taxBehavior: (process.env.STRIPE_TAX_BEHAVIOR === "inclusive" ? "inclusive" : "exclusive") as "inclusive" | "exclusive",
     };
   },
   /** The song's price in the smallest currency unit. Set on the server only; the browser never sends a price. */

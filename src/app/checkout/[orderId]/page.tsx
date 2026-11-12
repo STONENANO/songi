@@ -23,7 +23,7 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
   const prep = await prepareCheckout(c.order);
   if (prep.kind === "paid") redirect(`/checkout/${orderId}/complete`);
 
-  const price = prep.kind === "test" && prep.free ? "Free while testing" : env.priceLabel;
+  const price = prep.kind === "test" && prep.free ? "Free while testing" : prep.kind === "stripe" && prep.tax && env.stripe.taxBehavior === "exclusive" ? `${env.priceLabel} + tax` : env.priceLabel;
   return (
     <Screen>
       {prep.kind === "test" && <Banner>{prep.free ? "Free while we're testing. No card needed." : "Test checkout: no card is charged. Add Stripe keys for real payments."}</Banner>}
@@ -51,7 +51,7 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
         <PayForm
           orderId={orderId}
           requestId={c.request.id}
-          mode={prep.kind === "stripe" ? { kind: "stripe", clientSecret: prep.clientSecret, publishableKey: prep.publishableKey } : { kind: "test", free: prep.free }}
+          mode={prep.kind === "stripe" ? { kind: "stripe", clientSecret: prep.clientSecret, publishableKey: prep.publishableKey, tax: prep.tax, hasEmail: prep.hasEmail } : { kind: "test", free: prep.free }}
           priceLabel={price}
           email={c.request.email ?? ""}
         />
