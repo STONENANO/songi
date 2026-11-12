@@ -289,9 +289,7 @@ const mock = {
         const kind = t.behavior.kinds?.[i - 1] ?? "tone";
         const file = path.join(dir, `${taskId}-${i}-${kind}.mp3`);
         await makeMockAudio(file, kind, 261.63 * Math.pow(2, (i * 3 + (taskId.charCodeAt(taskId.length - 1) % 5)) / 12));
-        const cover = path.join(dir, `${taskId}-${i}-cover.jpg`);
-        if (!fs.existsSync(cover)) await run("ffmpeg", ["-y", "-f", "lavfi", "-i", `gradients=s=512x512:c0=0x${i % 2 ? "3a6ea5" : "c9573d"}:c1=0x1c1512:duration=1`, "-frames:v", "1", cover]).catch(() => undefined);
-        tracks.push({ id: `${taskId}-audio-${i}`, audio_url: `file://${file}`, image_url: fs.existsSync(cover) ? `file://${cover}` : undefined, title: t.input.title, duration: kind === "short" ? 20 : MOCK_DURATION, tags: t.input.style.slice(0, 60), model_name: "mock-suno" });
+        tracks.push({ id: `${taskId}-audio-${i}`, audio_url: `file://${file}`, title: t.input.title, duration: kind === "short" ? 20 : MOCK_DURATION, tags: t.input.style.slice(0, 60), model_name: "mock-suno" });
       }
       t.tracks = tracks;
     }

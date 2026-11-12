@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
@@ -29,25 +28,19 @@ const loadSong = cache(async (token: string) => {
   const quiz = (r.quizSnapshot ?? {}) as Record<string, unknown>;
   const giver = (typeof quiz.giverName === "string" && quiz.giverName) || brief?.giverName || "";
   const title = v.title || `${name}'s Song`;
-  // Our saved copy first; the provider's link only for songs made before covers were saved.
-  const cover = v.coverKey ? `/api/cover/${encodeURIComponent(token)}` : v.imageUrl;
-  return { order, v, r, lyrics, brief, name, giver, title, cover };
+  return { order, v, r, lyrics, brief, name, giver, title };
 });
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const song = await loadSong((await params).token);
   if (!song) return {};
   const description = `An original song written for ${song.name}${song.giver ? `, from ${song.giver}` : ""}. Press play.`;
-  // Link previews need an absolute image address; use the host this page was opened on.
-  const h = await headers();
-  const origin = h.get("host") ? `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}` : env.appUrl;
-  const images = song.cover ? [{ url: song.cover.startsWith("/") ? `${origin}${song.cover}` : song.cover, width: 512, height: 512 }] : undefined;
   return {
     title: `${song.title} · a song for ${song.name}`,
     description,
     robots: { index: false, follow: false },
-    openGraph: { title: song.title, description, type: "music.song", images },
-    twitter: { card: images ? "summary_large_image" : "summary", title: song.title, description },
+    openGraph: { title: song.title, description, type: "music.song" },
+    twitter: { card: "summary", title: song.title, description },
   };
 }
 
@@ -59,7 +52,7 @@ export default async function Delivery({ params, searchParams }: { params: Promi
   const [{ token }, { new: isNew }] = await Promise.all([params, searchParams]);
   const song = await loadSong(token);
   if (!song) notFound();
-  const { v, r, lyrics, brief, name, giver, title, cover } = song;
+  const { v, r, lyrics, brief, name, giver, title } = song;
 
   const filename = `${title.replace(/[^\w\- ]+/g, "").trim() || "song"}.mp3`;
   const listen = mediaUrl(issueMediaToken({ key: v.audioKey!, kind: "full", ttlSec: env.downloadUrlTtlSec, versionId: v.id }));
@@ -79,7 +72,6 @@ export default async function Delivery({ params, searchParams }: { params: Promi
       title={title}
       byline={`For ${name}${giver ? ` · from ${giver}` : ""} · ${getGenre(r.genreKey).label}`}
       recipient={name}
-      coverUrl={cover ?? null}
       src={listen}
       downloadHref={download}
       sections={sections}
