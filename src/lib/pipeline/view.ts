@@ -12,9 +12,11 @@ import { getGenre, normalizeBrief, draftIsSingable } from "../songcraft";
 import { issueMediaToken, mediaUrl, deliveryToken } from "../media/tokens";
 import { canSubmitTask, budgetConfig } from "./generation";
 import { getRequest, logEvent } from "./common";
-import type { Access } from "../session/project";
+import { canUseSong, type Access } from "../session/project";
+import { previewLinkFor } from "../session/preview-link";
+import { previewEmailKey } from "../email";
 
-const { lyricDrafts, songVersions, generations, orders, songRequests, feedback } = schema;
+const { lyricDrafts, songVersions, generations, orders, songRequests, feedback, webhookReceipts } = schema;
 
 type IssueView = { severity: string; category: string; section?: string; line?: string; reason: string };
 
@@ -29,6 +31,7 @@ export async function getRequestView(requestId: string, access: Access = "owner"
   const gens = await db.select().from(generations).where(eq(generations.requestId, requestId));
   const orderRows = await db.select().from(orders).where(eq(orders.requestId, requestId)).orderBy(desc(orders.createdAt));
   const [lastFeedback] = await db.select().from(feedback).where(eq(feedback.requestId, requestId)).orderBy(desc(feedback.createdAt)).limit(1);
+  const [linkEmail] = await db.select({ id: webhookReceipts.id }).from(webhookReceipts).where(eq(webhookReceipts.id, previewEmailKey(requestId))).limit(1);
 
   // Legacy projects (pre-v2) never ran candidate selection: show their ready versions.
   const legacy = r.status === "preview_ready" && !r.candidatesFinalizedAt && !versions.some((v) => v.offered);
@@ -38,7 +41,7 @@ export async function getRequestView(requestId: string, access: Access = "owner"
 
   const paid = orderRows.find((o) => o.status === "paid" && o.fulfilledAt);
   const pending = orderRows.find((o) => o.status === "pending");
-  const owner = access === "owner" || access === "legacy";
+  const owner = canUseSong(access);
 
   // Labels describe the real style; a second take of the same style is numbered, never renamed.
   const seenLabels = new Map<string, number>();
@@ -148,6 +151,14 @@ export async function getRequestView(requestId: string, access: Access = "owner"
           : null,
     feedback: lastFeedback ? { rating: lastFeedback.rating, wouldPay: lastFeedback.wouldPay, note: lastFeedback.note } : null,
     priceLabel: env.freeDownloads ? "free while testing" : env.priceLabel,
+    /**
+     * The direct link to these versions (works on any device until expiresAt), for the copy and
+     * share buttons. Only while the versions are on offer and unpaid, and never for a stranger.
+     */
+    previewLink: owner && r.status === "preview_ready" && !paid && !r.previewsPurgedAt ? previewLinkFor(r) : null,
+    previewLinkEmailed: !!linkEmail,
+    /** Unpurchased audio was deleted after the retention period: nothing left to play or buy. */
+    previewsExpired: !!r.previewsPurgedAt && !paid,
     // The test-mode banner is for local development; a live test site never shows it.
     mock: { llm: env.mockLlm, kie: env.mockKie, payments: env.mockPayments, banner: !env.isProd },
   };

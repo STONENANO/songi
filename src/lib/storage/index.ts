@@ -16,6 +16,8 @@ export interface Storage {
   exists(key: string): Promise<boolean>;
   /** Local path for serving or processing, downloading first if remote. */
   localPath(key: string): Promise<string>;
+  /** Delete the file (and any local cached copy). Deleting a missing file is not an error. */
+  delete(key: string): Promise<void>;
 }
 
 function localRoot(): string {
@@ -33,6 +35,10 @@ const localStorage: Storage = {
   },
   async localPath(key) {
     return path.join(localRoot(), key);
+  },
+  async delete(key) {
+    if (!isSafeKey(key)) throw new Error(`Unsafe storage key: ${key}`);
+    fs.rmSync(path.join(localRoot(), key), { force: true });
   },
 };
 
@@ -52,7 +58,7 @@ async function s3Client() {
 }
 
 async function s3Storage(): Promise<Storage> {
-  const { PutObjectCommand, GetObjectCommand, HeadObjectCommand } = await import("@aws-sdk/client-s3");
+  const { PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
   const client = await s3Client();
   return {
     async putFile(key, filePath, contentType) {
@@ -74,6 +80,11 @@ async function s3Storage(): Promise<Storage> {
       const bytes = await res.Body!.transformToByteArray();
       fs.writeFileSync(dest, Buffer.from(bytes));
       return dest;
+    },
+    async delete(key) {
+      if (!isSafeKey(key)) throw new Error(`Unsafe storage key: ${key}`);
+      await client.send(new DeleteObjectCommand({ Bucket: env.s3.bucket, Key: key }));
+      fs.rmSync(path.join(localRoot(), "cache", key), { force: true });
     },
   };
 }

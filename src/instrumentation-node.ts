@@ -13,6 +13,7 @@ export async function startupChecks() {
     }
     process.exit(1);
   }
+  scheduleRetention();
   if (env.storageDriver !== "s3") return;
   const missing = (["S3_BUCKET", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const).filter((k) => !process.env[k]);
   if (missing.length) {
@@ -22,4 +23,23 @@ export async function startupChecks() {
   const { checkBucket } = await import("./lib/storage");
   const r = await checkBucket();
   console[r.ok ? "log" : "error"](`[storage] ${r.message}`);
+}
+
+/**
+ * Delete unpurchased audio past its retention period: a few minutes after start, then every
+ * 6 hours. The timers don't keep the process alive. Errors are reported, never thrown.
+ */
+function scheduleRetention() {
+  const run = async () => {
+    try {
+      const { purgeExpiredPreviews } = await import("./lib/pipeline/retention");
+      const r = await purgeExpiredPreviews();
+      if (r.songs) console.log(`[retention] Deleted unpurchased audio for ${r.songs} song(s), ${r.files} file(s).`);
+    } catch (e) {
+      const { reportError } = await import("./lib/observability");
+      reportError(e, { where: "retention" });
+    }
+  };
+  setTimeout(() => void run(), 3 * 60_000).unref();
+  setInterval(() => void run(), 6 * 60 * 60_000).unref();
 }

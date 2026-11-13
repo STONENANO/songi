@@ -26,6 +26,7 @@ import { AmbiguousSubmitError, callbackUrl, createMusicTask, getTaskStatus, KieE
 import { logEvent, setStatus, failRequest, getRequest } from "./common";
 import { processTrack } from "./process";
 import { reportError } from "../observability";
+import { sendPreviewLinkEmail } from "../email";
 
 const { songRequests, lyricDrafts, generations, songVersions, costLedger } = schema;
 
@@ -354,6 +355,8 @@ async function finalize(r: SongRequest, draftId: string): Promise<void> {
     usable: ordered.usable,
     randomized: env.randomizeCandidateOrder,
   });
+  // The direct preview link, by email (once per song; a no-op until email is configured).
+  await sendPreviewLinkEmail(r.id);
 }
 
 /** Decide what happens next for the active round. Called after every task completes or fails. */

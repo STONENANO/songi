@@ -203,3 +203,11 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   count integer NOT NULL
 );
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
+
+-- Songs per email per week: the address as it is compared (lower case, no +tag, Gmail dots removed).
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS email_normalized text;
+CREATE INDEX IF NOT EXISTS song_requests_email_norm_idx ON song_requests(email_normalized, created_at);
+UPDATE song_requests SET email_normalized = lower(trim(email)) WHERE email_normalized IS NULL AND email IS NOT NULL AND email <> '';
+-- When unpurchased audio was deleted after the retention period.
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS previews_purged_at timestamptz;
+CREATE INDEX IF NOT EXISTS song_requests_finalized_idx ON song_requests(candidates_finalized_at) WHERE previews_purged_at IS NULL

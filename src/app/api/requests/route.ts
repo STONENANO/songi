@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod/v4";
-import { and, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { env } from "@/lib/env";
 import { GENRES } from "@/lib/songcraft";
@@ -8,6 +8,8 @@ import { runBriefing } from "@/lib/pipeline/run";
 import { newProjectToken, projectCookie } from "@/lib/session/project";
 import { rateLimit, clientIp } from "@/lib/http/rate-limit";
 import { verifyTurnstile } from "@/lib/http/turnstile";
+import { normalizeEmail } from "@/lib/email";
+import { reportIssue } from "@/lib/observability";
 import { composeStory, StoryAnswerSchema } from "@/lib/onboarding/story";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
@@ -47,21 +49,40 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues.map((i) => i.message).join(" ") }, { status: 400 });
   const b = parsed.data;
-  // A person pressed the button: checked before anything that costs money (or counts toward the daily cap).
-  const human = await verifyTurnstile(b.turnstileToken, ip);
-  if (!human.ok) return NextResponse.json({ error: "We couldn't confirm you're not a robot. Please try again.", code: "turnstile" }, { status: 403 });
   const fromQuiz = b.answers.length > 0;
   const story = fromQuiz ? composeStory(b.answers, b.oneLine) : b.story;
   if (story.trim().length < 10) return NextResponse.json({ error: "Tell us a little more." }, { status: 400 });
+  // The weekly per-email limit needs an address. The quiz always asks for one; local scripts may skip it.
+  if (env.isProd && !b.email) return NextResponse.json({ error: "Please enter your email." }, { status: 400 });
+  const emailNormalized = b.email ? normalizeEmail(b.email) : null;
 
   const db = await getDb();
-  // Site-wide daily cap: every song costs real API money, and the test site is open to anyone.
-  if (env.maxSongsPerDay > 0) {
-    const since = new Date(Date.now() - 24 * 60 * 60_000);
-    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.songRequests).where(and(gte(schema.songRequests.createdAt, since)));
-    if (n >= env.maxSongsPerDay) {
-      return NextResponse.json({ error: "We've reached today's limit for new songs while we're testing. Please try again tomorrow." }, { status: 429 });
+  // Free previews per email address per rolling week.
+  if (emailNormalized && env.maxSongsPerEmailPerWeek > 0) {
+    const week = 7 * 24 * 60 * 60_000;
+    const recent = await db
+      .select({ at: schema.songRequests.createdAt })
+      .from(schema.songRequests)
+      .where(and(eq(schema.songRequests.emailNormalized, emailNormalized), gte(schema.songRequests.createdAt, new Date(Date.now() - week))))
+      .orderBy(asc(schema.songRequests.createdAt));
+    if (recent.length >= env.maxSongsPerEmailPerWeek) {
+      // When the oldest of them leaves the 7-day window. In days, not a date: the server doesn't know the buyer's time zone.
+      const days = Math.max(1, Math.ceil((recent[0].at.getTime() + week - Date.now()) / (24 * 60 * 60_000)));
+      return NextResponse.json(
+        { error: `You've started ${env.maxSongsPerEmailPerWeek} songs with this email this week. You can start another in ${days} day${days === 1 ? "" : "s"}.`, code: "email_weekly_limit" },
+        { status: 429 },
+      );
     }
+  }
+  // A person pressed the button: checked before anything that costs money.
+  const human = await verifyTurnstile(b.turnstileToken, ip);
+  if (!human.ok) return NextResponse.json({ error: "We couldn't confirm you're not a robot. Please try again.", code: "turnstile" }, { status: 403 });
+
+  // Optional site-wide cap (off by default: MAX_SONGS_PER_DAY=0). Volume is watched by songVolumeAlert below instead.
+  const since = new Date(Date.now() - 24 * 60 * 60_000);
+  const songsToday = async () => (await db.select({ n: sql<number>`count(*)::int` }).from(schema.songRequests).where(gte(schema.songRequests.createdAt, since)))[0].n;
+  if (env.maxSongsPerDay > 0 && (await songsToday()) >= env.maxSongsPerDay) {
+    return NextResponse.json({ error: "We've reached today's limit for new songs. Please try again tomorrow." }, { status: 429 });
   }
   const { token, hash } = newProjectToken();
   const [row] = await db
@@ -77,6 +98,7 @@ export async function POST(req: Request) {
       mood: b.mood || null,
       customStyle: b.customStyle || null,
       email: b.email || null,
+      emailNormalized,
       accessTokenHash: hash,
       // The story quiz's extra answers (one line, feeling, leave-out, who it's from…) live here;
       // `autoRecord` makes the pipeline record as soon as verified lyrics exist.
@@ -94,6 +116,11 @@ export async function POST(req: Request) {
     })
     .returning({ id: schema.songRequests.id });
 
+  // With no daily cap, an unusual day should still reach a person: report each multiple of the threshold.
+  if (env.songVolumeAlertPerDay > 0) {
+    const n = await songsToday();
+    if (n % env.songVolumeAlertPerDay === 0) reportIssue(`${n} new songs in the last 24 hours`, { kind: "song_volume", count: n, threshold: env.songVolumeAlertPerDay }, "warning");
+  }
   after(() => runBriefing(row.id));
   const res = NextResponse.json({ id: row.id }, { status: 201 });
   res.headers.append("Set-Cookie", projectCookie(row.id, token));

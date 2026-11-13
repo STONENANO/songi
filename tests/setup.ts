@@ -27,6 +27,13 @@ Object.assign(process.env, {
   NODE_ENV: "test",
   LYRIC_DRAFTS: "1",
   SONGCRAFT_WRITER: "v2",
+  // Hermetic: no real email, bot-check or error-tracking calls, whatever the shell has set.
+  POSTMARK_SERVER_TOKEN: "",
+  RESEND_API_KEY: "",
+  EMAIL_FROM: "",
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: "",
+  TURNSTILE_SECRET_KEY: "",
+  NEXT_PUBLIC_SENTRY_DSN: "",
 });
 
 export const TEST_STORAGE_DIR = storage;

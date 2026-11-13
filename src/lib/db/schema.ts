@@ -54,6 +54,10 @@ export const songRequests = pgTable("song_requests", {
   activeDraftId: uuid("active_draft_id"),
   selectedVersionId: uuid("selected_version_id"),
   candidatesFinalizedAt: timestamp("candidates_finalized_at", { withTimezone: true }),
+  /** Lower case, no +tag, Gmail dots removed: the address as the per-email weekly limit compares it. */
+  emailNormalized: text("email_normalized"),
+  /** When unpurchased audio was deleted after the retention period. */
+  previewsPurgedAt: timestamp("previews_purged_at", { withTimezone: true }),
 });
 
 export const lyricDrafts = pgTable("lyric_drafts", {

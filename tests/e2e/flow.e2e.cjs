@@ -8,6 +8,11 @@ const { chromium } = require("playwright");
 const assert = require("node:assert/strict");
 
 const BASE = process.env.E2E_BASE_URL || "http://localhost:4747";
+// A fresh address for every song: each email may start only 3 songs a week
+// (MAX_SONGS_PER_EMAIL_PER_WEEK), and "+tags" count as the same address, so vary the name itself.
+const RUN = Date.now().toString(36);
+let emails = 0;
+const nextEmail = () => `tester-${RUN}-${++emails}@example.com`;
 const SHOTS = process.env.E2E_SCREENSHOTS || "";
 
 (async () => {
@@ -65,7 +70,7 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   await tap("Country");
   await tap("Female voice");
   await tap("Continue");
-  await page.locator('input[type="email"]').fill("tester@example.com");
+  await page.locator('input[type="email"]').fill(nextEmail());
   await tap("Write Linda's song");
   await page.waitForURL(/\/r\//);
   const songUrl = page.url();
@@ -95,6 +100,16 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   assert.equal((await stranger.request.get(`${BASE}/api/requests/${id}`)).status(), 403);
   assert.equal((await stranger.request.post(`${BASE}/api/requests/${id}/checkout`, { data: { versionId: api.candidates[0].id } })).status(), 403);
   await stranger.close();
+
+  // 4b. The direct preview link: shown with a copy button, and it opens the versions in a fresh browser.
+  assert.ok(await page.isVisible("text=Save your preview link"), "preview link card shown");
+  assert.ok(api.previewLink && api.previewLink.url.includes(`/r/${id}?p=`), "preview link in the API view");
+  const phone = await browser.newContext();
+  const phonePage = await phone.newPage();
+  await phonePage.goto(api.previewLink.url.replace(/^https?:\/\/[^/]+/, BASE));
+  await phonePage.waitForSelector("audio", { state: "attached" });
+  assert.equal((await phonePage.$$eval("audio", (as) => as.length)), 3, "the link opens all versions on another device");
+  await phone.close();
 
   // 5. Select the second version (persists across reload), buy it
   const choose = page.locator('button:has-text("Choose this version")');
@@ -183,7 +198,7 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
     await t("Country");
     await t("Female voice");
     await t("Continue");
-    await p.locator('input[type="email"]').fill("tester@example.com");
+    await p.locator('input[type="email"]').fill(nextEmail());
     await t("Write Rasheda's song");
     await p.waitForURL(/\/r\//);
     return p.url().split("/r/")[1];

@@ -64,6 +64,22 @@ export default function SongView({ id }: { id: string }) {
     if (songPage) window.location.replace(songPage);
   }, [songPage]);
 
+  if (phase === "expired") {
+    const linkOnly = song.problem === "link_expired";
+    return (
+      <Screen>
+        <ScreenTitle
+          title={linkOnly ? "This preview link has expired." : "These previews have expired."}
+          subtitle={
+            linkOnly
+              ? "Preview links work for a limited time. If you made this song in this browser, open it from there, or start a new one."
+              : "Versions that weren't bought are only kept for a while. You can start a new song any time."
+          }
+        />
+        <Button href="/create">Start a song</Button>
+      </Screen>
+    );
+  }
   if (phase === "missing" || phase === "denied") {
     return (
       <Screen>
@@ -190,6 +206,50 @@ function Recording({ view }: { view: RequestView }) {
   );
 }
 
+/* ------------------------------ preview link ------------------------------ */
+
+/** The direct link to these versions: copy it or send it to yourself, to listen and buy on any device. */
+function PreviewLinkCard({ link, emailed, name }: { link: { url: string; expiresAt: string }; emailed: boolean; name: string }) {
+  const [copied, setCopied] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function"), []);
+  // The buyer's own clock and time zone.
+  const until = new Date(link.expiresAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt("Copy your preview link:", link.url);
+    }
+  };
+  const share = async () => {
+    try {
+      await navigator.share({ title: `${name}'s song`, url: link.url });
+    } catch {
+      /* the buyer closed the share sheet */
+    }
+  };
+  return (
+    <Card tone="muted" title="Save your preview link">
+      <Note>
+        Opens these versions on any device until {until}.{emailed ? " We've emailed it to you too." : ""} Anyone with the link can listen and buy, so keep it to yourself.
+      </Note>
+      <div className="ui-row ui-mt" style={{ gap: 8, flexWrap: "wrap" }}>
+        <Button variant="secondary" onClick={() => void copy()}>
+          {copied ? "✓ Copied" : "Copy link"}
+        </Button>
+        {canShare && (
+          <Button variant="text" onClick={() => void share()}>
+            Send to myself…
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 /* --------------------------------- versions --------------------------------- */
 
 function Versions({ view, song }: { view: RequestView; song: Song }) {
@@ -250,6 +310,7 @@ function Versions({ view, song }: { view: RequestView; song: Song }) {
           {view.order?.status === "paid_unfulfilled" && <ErrorText>Your payment went through but we couldn&apos;t prepare the file. We&apos;ve been notified and will deliver it.</ErrorText>}
         </div>
       )}
+      {!paid && view.previewLink && <PreviewLinkCard link={view.previewLink} emailed={view.previewLinkEmailed} name={name} />}
       {paid && view.order?.deliveryLink && (
         <Card tone="muted" title="Keep this link">
           <Note>
