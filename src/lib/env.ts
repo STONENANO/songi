@@ -87,9 +87,13 @@ export const env = {
   get supabasePublishableKey(): string {
     return process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "";
   },
-  /** Sign-in provider enabled in Supabase -> Authentication -> Sign In / Providers. */
-  get adminAuthProvider(): "google" | "github" {
-    return process.env.ADMIN_AUTH_PROVIDER === "github" ? "github" : "google";
+  /**
+   * How admins sign in. email (default): Supabase emails a one-time sign-in link, no other setup.
+   * google / github: that provider must be enabled in Supabase -> Authentication -> Sign In / Providers.
+   */
+  get adminAuthProvider(): "email" | "google" | "github" {
+    const v = process.env.ADMIN_AUTH_PROVIDER;
+    return v === "google" || v === "github" ? v : "email";
   },
   /** The only accounts allowed into /admin (comma-separated, any case). Empty = nobody. */
   get adminEmails(): string[] {

@@ -104,27 +104,32 @@ Kie tasks for three takes. Note your Kie credits before and after the first song
 
 ## Admin sign-in
 
-`/admin` (songs, takes, feedback, Numbers) is behind a Google sign-in through Supabase Auth. Supabase only
-proves who someone is; only the accounts in `ADMIN_EMAILS` get in, and everyone else is told they don't have
-access. The pages aren't linked from the site and tell search engines not to index them. Locally, with no
-Supabase settings, `/admin` is open as before; on a production server without them it is closed to everyone.
+`/admin` (songs, takes, feedback, Numbers) is behind a Supabase Auth sign-in. Supabase only proves who someone
+is; only the accounts in `ADMIN_EMAILS` get in. The pages aren't linked from the site and tell search engines not
+to index them. Locally, with no Supabase settings, `/admin` is open as before; on a production server without
+them it is closed to everyone.
 
-One-time setup:
-1. Supabase: create a project (the free plan is enough; only its Auth is used, the app's data stays in its own
-   database). Copy the Project URL and the publishable key from Project Settings -> API Keys.
-2. Google Cloud Console -> APIs & Services -> Credentials -> Create OAuth client ID (Web application).
-   Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`. (First set up the consent
-   screen: External, app name, your email.)
-3. Supabase -> Authentication -> Sign In / Providers -> Google: turn it on and paste the client ID and secret.
-4. Supabase -> Authentication -> URL Configuration: Site URL `https://www.getcryworthy.com`, and add
-   `https://www.getcryworthy.com/admin/auth/callback` (plus `http://localhost:4747/admin/auth/callback` for local
-   testing) to the Redirect URLs.
-5. On the server: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ADMIN_EMAILS` (comma-separated). `APP_URL` must be
-   the site's public address. The server refuses to start with only some of the three set.
+**Email link (default, `ADMIN_AUTH_PROVIDER=email`).** Enter your email on `/admin/login` and Supabase emails a
+one-time sign-in link. Links are only sent to addresses in `ADMIN_EMAILS` (the page says the same thing either
+way, so it never reveals who has access), and a link only works in the browser that asked for it.
+
+Setup:
+1. Supabase -> Authentication -> URL Configuration -> Redirect URLs: add
+   `https://www.getcryworthy.com/admin/auth/callback` (and `http://localhost:4747/admin/auth/callback` for local
+   testing). Without it, the emailed link lands on the project's Site URL instead.
+2. On the server: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (Project Settings -> API Keys) and `ADMIN_EMAILS`
+   (comma-separated). `APP_URL` must be the site's public address. The server refuses to start with only some
+   of the three set.
+3. Supabase's built-in email sender is rate limited and meant for low volume, which is fine for admin sign-ins.
+   For more, set up custom SMTP in Supabase -> Authentication -> Emails.
+
+**Google or GitHub instead (`ADMIN_AUTH_PROVIDER=google` or `github`).** Create an OAuth client with the provider
+(for Google: Cloud Console -> APIs & Services -> Credentials -> OAuth client ID, Web application, redirect URI
+`https://<project-ref>.supabase.co/auth/v1/callback`), enable the provider in Supabase -> Authentication -> Sign
+In / Providers with its client ID and secret, and add the same Redirect URL as above.
 
 The flow runs on the server (PKCE), the session cookies are httpOnly, and `src/middleware.ts` refreshes the
 session on /admin requests. `ADMIN_TOKEN` now only opens the admin API (`/api/admin/ip`).
-To use GitHub instead of Google, enable it in Supabase and set `ADMIN_AUTH_PROVIDER=github`.
 
 ## Unit economics (/admin/numbers)
 

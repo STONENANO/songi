@@ -58,3 +58,10 @@ test("production refuses a half-configured admin sign-in, allows all or none", (
   withEnv({ ...base, ...none, ADMIN_EMAILS: "owner@example.com" }, () => assert.equal(signIn(productionConfigProblems()).length, 1, "emails but no project"));
   withEnv({ ...base, ...all, SUPABASE_PUBLISHABLE_KEY: "" }, () => assert.equal(signIn(productionConfigProblems()).length, 1, "no key"));
 });
+
+test("sign-in method defaults to an emailed link; google and github only when asked for", () => {
+  withEnv({ ADMIN_AUTH_PROVIDER: undefined }, () => assert.equal(env.adminAuthProvider, "email"));
+  withEnv({ ADMIN_AUTH_PROVIDER: "google" }, () => assert.equal(env.adminAuthProvider, "google"));
+  withEnv({ ADMIN_AUTH_PROVIDER: "github" }, () => assert.equal(env.adminAuthProvider, "github"));
+  withEnv({ ADMIN_AUTH_PROVIDER: "facebook" }, () => assert.equal(env.adminAuthProvider, "email"));
+});
