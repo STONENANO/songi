@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { loadStripe, type StripeCheckoutElementsSdk, type StripeCheckoutLoadActionsSuccess, type StripeCheckoutSession } from "@stripe/stripe-js";
 import { Button, Card, ErrorText, Field, Note, TrustRow } from "@/components/ui";
 
@@ -93,6 +94,7 @@ export default function PayForm({ orderId, requestId, mode, priceLabel, email }:
         setBusy(false);
         return;
       }
+      posthog.capture("payment_submission_started", { checkout_mode: "test" });
       router.push(`/checkout/${orderId}/complete`);
       return;
     }
@@ -107,6 +109,7 @@ export default function PayForm({ orderId, requestId, mode, priceLabel, email }:
       }
     }
     // Stripe handles 3-D Secure and wallet sheets, then returns the buyer to our post-purchase page.
+    posthog.capture("payment_submission_started", { checkout_mode: "stripe" });
     const result = await actions.confirm();
     if (result.type === "error") {
       setError(result.error.message || "Your payment didn't go through. Please try again.");

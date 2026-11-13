@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, fill, inferRelationship, isGentleOccasion, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
 import { beatFor, formatFor, ingredientsFor, isAnswered, type TopicAnswer } from "@/lib/onboarding/story-formats";
 import { boostersFor, isThin } from "@/lib/onboarding/depth";
@@ -386,6 +387,16 @@ export function useQuiz() {
       return;
     }
     const id = (json as { id: string }).id;
+    posthog.capture("song_request_submitted", {
+      story_topic_count: s.threads.length,
+      answered_topic_count: answered.length,
+      story_strength: strength,
+      used_open_story_field: !!s.anythingElse.trim(),
+      used_boosters: Object.values(s.boosters).some((value) => value.trim()),
+      story_was_thin: thin,
+      genre_key: s.genreKey === CUSTOM_GENRE ? "custom" : s.genreKey,
+      vocal_gender: s.vocalGender,
+    });
     track(
       "quiz:submitted",
       { threads: s.threads.length, answered: answered.length, ingredients: ingredients.length, strength, beatsEdited: beats.filter((b) => b.edited).length, beatsLeftOut: beats.filter((b) => b.gone).length, openBox: !!s.anythingElse.trim(), thin, boostersFilled: Object.values(s.boosters).filter((v) => v.trim()).length, stillThin },

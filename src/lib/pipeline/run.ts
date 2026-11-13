@@ -69,7 +69,7 @@ export async function runBriefing(requestId: string): Promise<void> {
   if (!r || !["draft", "briefing", "needs_input"].includes(r.status)) return;
   try {
     await setStatus(requestId, "briefing");
-    const { result: brief, usage } = await withUsage(() => extractBrief(toQuizInput(r)));
+    const { result: brief, usage } = await withUsage(requestId, () => extractBrief(toQuizInput(r)));
     await recordLlmUsage(requestId, usage);
     const db = await getDb();
     await db.update(songRequests).set({ brief: brief as unknown as Record<string, unknown>, briefVersion: BRIEF_VERSION, updatedAt: new Date() }).where(eq(songRequests.id, requestId));
@@ -173,7 +173,7 @@ export async function runLyrics(requestId: string, opts: { source: "generated" |
   try {
     await setStatus(requestId, "writing_lyrics");
     const parent = await latestDraft(requestId);
-    const { result, usage } = await withUsage(() =>
+    const { result, usage } = await withUsage(requestId, () =>
       writeLyrics({ brief, genre: getGenre(r.genreKey), mood: r.mood, occasion: r.occasion, variation: opts.source === "regenerated" }),
     );
     await recordLlmUsage(requestId, usage);
@@ -203,7 +203,7 @@ export async function submitEditedLyrics(requestId: string, text: string): Promi
   const brief = normalizeBrief(r?.brief);
   if (!r || !brief || !["lyrics_ready", "preview_ready"].includes(r.status)) return { ok: false, error: "Lyrics cannot be edited right now." };
   const latest = await latestDraft(requestId);
-  const { result, usage } = await withUsage(() =>
+  const { result, usage } = await withUsage(requestId, () =>
     evaluateEditedLyrics(text, {
       brief,
       genre: getGenre(r.genreKey),

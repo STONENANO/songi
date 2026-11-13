@@ -13,6 +13,8 @@ export async function register() {
       const { sentryOptions } = await import("./lib/observability-scrub");
       Sentry.init(sentryOptions(process.env.NEXT_PUBLIC_SENTRY_DSN, process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "development"));
     }
+    const { initializePostHogLogCapture } = await import("./lib/posthog-logs");
+    initializePostHogLogCapture();
     const { startupChecks } = await import("./instrumentation-node");
     await startupChecks();
   }

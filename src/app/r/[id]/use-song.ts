@@ -1,6 +1,7 @@
 "use client";
 /** Song project state: polling and actions. No markup; song-view.tsx renders it. */
 import { useCallback, useEffect, useRef, useState } from "react";
+import posthog from "posthog-js";
 import type { RequestView } from "@/lib/pipeline/view";
 import { STEPS } from "@/lib/pipeline/states";
 
@@ -114,6 +115,7 @@ export function useSong(id: string) {
       const key = `${type}:${versionId}`;
       if (tracked.current.has(key)) return;
       tracked.current.add(key);
+      posthog.capture(type === "preview_play" ? "preview_played" : "preview_completed", { version_position: position });
       void fetch(`/api/requests/${id}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, versionId, position }) }).catch(() => {});
     },
     [id],
@@ -127,27 +129,44 @@ export function useSong(id: string) {
     busy: busy || !!awaiting,
     error,
     pendingOrder,
-    answerFollowUps: (answers: Record<string, string>) => post("/answers", { answers }, { movesOn: true }),
+    answerFollowUps: async (answers: Record<string, string>) => {
+      const result = await post("/answers", { answers }, { movesOn: true });
+      if (result) posthog.capture("follow_up_answers_submitted", { answer_count: Object.keys(answers).length });
+      return result;
+    },
     record: (draftId?: string) => post("/generate", draftId ? { draftId } : {}, { movesOn: true }),
     moreTakes: () => post("/generate", { more: true }, { movesOn: true }),
-    select: (versionId: string) => post("/select", { versionId }),
+    select: async (versionId: string) => {
+      const result = await post("/select", { versionId });
+      if (result) posthog.capture("song_version_selected");
+      return result;
+    },
     buy: async (versionId: string) => {
       const j = await post("/checkout", { versionId });
-      if (j?.checkoutUrl) window.location.href = j.checkoutUrl as string;
+      if (j?.checkoutUrl) {
+        posthog.capture("checkout_started");
+        window.location.href = j.checkoutUrl as string;
+      }
     },
     /** Save edited lines, then record them (the server re-checks them first). */
     editAndRerecord: async (text: string) => {
       const saved = await post("/lyrics", { action: "edit", text });
       if (!saved) return false;
+      posthog.capture("lyrics_edit_submitted");
       if (saved.status !== "verified") {
         setError("We saved your edit, but it needs a small fix before we can sing it. See the notes on the lyrics.");
         return true;
       }
       return !!(await post("/generate", {}, { movesOn: true }));
     },
-    newLyrics: () => post("/lyrics", { action: "regenerate" }, { movesOn: true }),
+    newLyrics: async () => {
+      const result = await post("/lyrics", { action: "regenerate" }, { movesOn: true });
+      if (result) posthog.capture("lyrics_regeneration_requested");
+      return result;
+    },
     sendFeedback: async (body: { rating: number; wouldPay: string | null; note: string; versionId: string | null }) => {
       const res = await fetch(`/api/requests/${id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+      if (res?.ok) posthog.capture("song_feedback_submitted", { rating: body.rating, would_pay: body.wouldPay ?? "not_provided" });
       return !!res?.ok;
     },
     trackPlay,
