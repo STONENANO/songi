@@ -182,6 +182,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_checkout_session_id text;
 CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_cs_idx ON orders(stripe_checkout_session_id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_cents integer;
 
+-- PostHog: the visitor's anonymous PostHog id, so server events (previews ready, paid)
+-- join the same person's quiz funnel in PostHog.
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS posthog_id text;
+
 -- Lock every table to the server. On Supabase the public schema is also served by
 -- its Data API; with RLS on and no policies, the anon and authenticated keys see
 -- nothing. The app connects as the database owner, which RLS does not restrict.

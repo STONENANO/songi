@@ -27,6 +27,16 @@ export const env = {
     return (process.env.APP_URL ?? "http://localhost:4747").replace(/\/$/, "");
   },
 
+  /* ---------------- PostHog (product analytics) ---------------- */
+  /** Project API key (phc_...). Public by design: the browser sends it with every event. Empty = analytics off. */
+  get posthogKey(): string {
+    return process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "";
+  },
+  /** https://us.i.posthog.com (US cloud) or https://eu.i.posthog.com (EU cloud). */
+  get posthogHost(): string {
+    return (process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com").replace(/\/$/, "");
+  },
+
   /* ---------------- Claude ---------------- */
   get anthropicApiKey(): string {
     return process.env.ANTHROPIC_API_KEY ?? "";

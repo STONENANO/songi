@@ -36,6 +36,8 @@ export function contentSecurityPolicy(o: Options): string {
     `connect-src 'self' https://api.stripe.com https://*.stripe.com https://maps.googleapis.com${sentry ? ` ${sentry}` : ""}${o.dev ? " ws: wss:" : ""}`,
     // Stripe's payment frames, and Cloudflare Turnstile's check on the quiz's last screen.
     "frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com",
+    // PostHog session replay compresses recordings in a worker started from a blob: URL.
+    "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",

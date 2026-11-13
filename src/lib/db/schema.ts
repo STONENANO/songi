@@ -58,6 +58,8 @@ export const songRequests = pgTable("song_requests", {
   emailNormalized: text("email_normalized"),
   /** When unpurchased audio was deleted after the retention period. */
   previewsPurgedAt: timestamp("previews_purged_at", { withTimezone: true }),
+  /** The visitor's PostHog distinct id, sent by the quiz, so server events join their funnel. */
+  posthogId: text("posthog_id"),
 });
 
 export const lyricDrafts = pgTable("lyric_drafts", {

@@ -36,6 +36,8 @@ const Body = z.object({
   email: z.string().trim().email("Please enter a valid email.").optional().or(z.literal("")).default(""),
   /** Cloudflare Turnstile token from the quiz (required when Turnstile is configured). */
   turnstileToken: z.string().max(2048).optional(),
+  /** The visitor's PostHog id, so server events (previews ready, paid) join their funnel. */
+  posthogId: z.string().trim().max(200).optional().default(""),
 });
 
 export async function POST(req: Request) {
@@ -99,10 +101,11 @@ export async function POST(req: Request) {
       customStyle: b.customStyle || null,
       email: b.email || null,
       emailNormalized,
+      posthogId: b.posthogId || null,
       accessTokenHash: hash,
       // The story quiz's extra answers (one line, feeling, leave-out, who it's from…) live here;
       // `autoRecord` makes the pipeline record as soon as verified lyrics exist.
-      quizSnapshot: { ...b, turnstileToken: undefined, story, autoRecord: fromQuiz, quizVersion: fromQuiz ? "story-v1" : "classic", submittedAt: new Date().toISOString() },
+      quizSnapshot: { ...b, turnstileToken: undefined, posthogId: undefined, story, autoRecord: fromQuiz, quizVersion: fromQuiz ? "story-v1" : "classic", submittedAt: new Date().toISOString() },
       // Experiment arm recorded with the project so results can be compared later.
       experiment: {
         writer: env.writerVersion,

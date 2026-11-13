@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, fill, inferRelationship, isGentleOccasion, threadByKey, type Pronoun, type Group } from "@/lib/onboarding/content";
 import { beatFor, formatFor, ingredientsFor, isAnswered, type TopicAnswer } from "@/lib/onboarding/story-formats";
 import { boostersFor, isThin } from "@/lib/onboarding/depth";
+import { captureEvent, posthogId } from "@/lib/analytics/client";
 
 /** One line read back to the buyer before we write ("story beat"). */
 export type Beat = { key: string; topic: string; emoji: string; text: string; original: string; edited: boolean; gone: boolean };
@@ -111,6 +112,7 @@ function sessionId(): string {
 }
 
 export function track(type: string, payload: Record<string, string | number | boolean> = {}, requestId?: string) {
+  captureEvent(type, requestId ? { ...payload, request_id: requestId } : payload);
   try {
     const body = JSON.stringify({ type, sessionId: sessionId(), requestId, payload });
     if (navigator.sendBeacon) navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" }));
@@ -360,6 +362,7 @@ export function useQuiz(turnstileSiteKey = "") {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        posthogId: posthogId(),
         recipientName: s.recipientName,
         pronunciation: s.pronunciation,
         relationship: relationshipValue,

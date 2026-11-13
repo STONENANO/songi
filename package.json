@@ -27,6 +27,8 @@
     "drizzle-orm": "^0.44.0",
     "next": "^15.5.0",
     "postgres": "^3.4.5",
+    "posthog-js": "^1.447.15",
+    "posthog-node": "^5.71.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "stripe": "23.0.0",
