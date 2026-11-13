@@ -23,7 +23,9 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
   const prep = await prepareCheckout(c.order);
   if (prep.kind === "paid") redirect(`/checkout/${orderId}/complete`);
 
-  const price = prep.kind === "test" && prep.free ? "Free while testing" : prep.kind === "stripe" && prep.tax && env.stripe.taxBehavior === "exclusive" ? `${env.priceLabel} + tax` : env.priceLabel;
+  // What this checkout actually sells (the price can change in Stripe; an open session keeps its own).
+  const price =
+    prep.kind === "test" ? (prep.free ? "Free while testing" : prep.priceLabel) : prep.kind === "stripe" ? (prep.tax && prep.taxExclusive ? `${prep.priceLabel} + tax` : prep.priceLabel) : "";
   return (
     <Screen>
       {prep.kind === "test" && <Banner>{prep.free ? "Free while we're testing. No card needed." : "Test checkout: no card is charged. Add Stripe keys for real payments."}</Banner>}

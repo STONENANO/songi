@@ -15,6 +15,7 @@ import { getRequest, logEvent } from "./common";
 import { canUseSong, type Access } from "../session/project";
 import { previewLinkFor } from "../session/preview-link";
 import { previewEmailKey } from "../email";
+import { getSongPrice } from "../commerce/pricing";
 
 const { lyricDrafts, songVersions, generations, orders, songRequests, feedback, webhookReceipts } = schema;
 
@@ -150,7 +151,7 @@ export async function getRequestView(requestId: string, access: Access = "owner"
           ? { status: "paid_unfulfilled" as const, versionId: orderRows.find((o) => o.status === "paid_unfulfilled")!.versionId, deliveryLink: null }
           : null,
     feedback: lastFeedback ? { rating: lastFeedback.rating, wouldPay: lastFeedback.wouldPay, note: lastFeedback.note } : null,
-    priceLabel: env.freeDownloads ? "free while testing" : env.priceLabel,
+    priceLabel: env.freeDownloads ? "free while testing" : (await getSongPrice()).label,
     /**
      * The direct link to these versions (works on any device until expiresAt), for the copy and
      * share buttons. Only while the versions are on offer and unpaid, and never for a stranger.

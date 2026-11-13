@@ -38,7 +38,7 @@ Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile include
 | `STRIPE_WEBHOOK_SECRET` | Developers → Webhooks → add `https://<domain>/api/webhooks/stripe` → signing secret (`whsec_…`). Locally: `stripe listen --forward-to localhost:4747/api/webhooks/stripe` (Stripe CLI: `npm i -g @stripe/cli`) |
 | `STRIPE_ENABLED` | The Stripe switch. `false` (default): test checkout, nothing charged, even with keys set. `true`: real payments |
 | `SONG_PRICE_CENTS` / `SONG_CURRENCY` | The price (default 3900 = $39, usd). Set on the server only |
-| `STRIPE_PRICE_ID` | Optional. The Stripe Price to sell (`price_…`), so sales land on your product in Stripe. Must be one-time and equal `SONG_PRICE_CENTS`, or checkout refuses to open (and alerts Sentry). Sandbox and live have different ids; `npm run doctor` checks it |
+| `STRIPE_PRODUCT_ID` | Recommended. The price is read from this Stripe product's default price: change it in Stripe (add a price, "Set as default price") and the site follows within a minute, at once with the price webhooks. See "Pricing from Stripe" below |
 | `STRIPE_AUTOMATIC_TAX` / `STRIPE_TAX_CODE` / `STRIPE_TAX_BEHAVIOR` | Stripe Tax. See "Stripe Tax" below before turning it on |
 
 Add keys one at a time. With only `ANTHROPIC_API_KEY` set you get real lyrics and still spend nothing on music.
@@ -166,6 +166,15 @@ takes it as a build arg. Use `NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com`
 Main funnel: `quiz:step_view` -> `quiz:submitted` -> `status:preview_ready` -> `preview_play` ->
 `candidate:selected` -> `checkout:started` -> `order:paid`. For quiz drop-off, break down `quiz:step_view` by `step`.
 
+## Pricing from Stripe
+
+With `STRIPE_PRODUCT_ID` (or `STRIPE_PRICE_ID` to pin one price), Stripe is the source of truth for the price (`src/lib/commerce/pricing.ts`):
+
+- **Change the price** in Dashboard → Product catalog → the product → Add another price → "Set as default price". No deploy.
+- **Fast pages**: the price is cached and refreshed in the background every minute; the `product.updated` and `price.*` webhooks refresh it at once.
+- **Hard to break**: if Stripe can't be reached, pages keep the last good price (or `SONG_PRICE_CENTS` before the first load). Checkout always sells a freshly checked price and refuses an archived, recurring, tiered or pay-what-you-want one, alerting Sentry. Each order stores the amount it was sold at and payments are checked against that, so a price change mid-checkout is safe.
+- `npm run doctor` shows where the price comes from and whether it can be sold.
+
 ## Stripe Tax
 
 Checkout is a Stripe Checkout Session shown inside our page (`ui_mode: "elements"`), so turning on tax is one setting: `automatic_tax`. When `STRIPE_AUTOMATIC_TAX=true`, the checkout adds an address form, and Stripe works out the tax from that address and adds it on top of the price (`STRIPE_TAX_BEHAVIOR=exclusive`). Stripe also records each sale for tax reports and reverses the tax on refunds. Before turning it on:
@@ -181,7 +190,7 @@ Sandbox and live mode keep separate tax settings and registrations, so do steps 
 
 - Set `MEDIA_SIGNING_SECRET`, `KIE_WEBHOOK_SECRET` and `KIE_WEBHOOK_HMAC_KEY` (from kie.ai settings). A production server (`NODE_ENV=production`) **refuses to start** and lists what is missing when any of these is unset or a placeholder, when `STRIPE_ENABLED=true` lacks a Stripe key or `STRIPE_WEBHOOK_SECRET`, or when `STORAGE_DRIVER=s3` lacks an `S3_*` setting.
 - Use Postgres (`DATABASE_URL`) and private S3/R2 storage (`STORAGE_DRIVER=s3`).
-- Set `STRIPE_ENABLED=true` (payments are off by default). In Stripe: set `STRIPE_SECRET_KEY` (a restricted `rk_live_` key is safer), `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`. Add the webhook endpoint `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed` and `charge.refunded`. Add `payment_intent.succeeded` and `payment_intent.canceled` too while orders from before this change are still open. Turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay. To collect tax, follow "Stripe Tax" above in live mode.
+- Set `STRIPE_ENABLED=true` (payments are off by default). In Stripe: set `STRIPE_SECRET_KEY` (a restricted `rk_live_` key is safer), `STRIPE_PUBLISHABLE_KEY` and `STRIPE_WEBHOOK_SECRET`. Add the webhook endpoint `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed` and `charge.refunded`, plus `product.updated`, `price.created`, `price.updated` and `price.deleted` so price changes show at once. Add `payment_intent.succeeded` and `payment_intent.canceled` too while orders from before this change are still open. Turn on Link, Apple Pay and Google Pay under Payment methods, and register your domain for Apple Pay. To collect tax, follow "Stripe Tax" above in live mode.
 - Run on a long-running Node host; background work uses Next's `after()`.
 - Bot check: set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` (Cloudflare → Turnstile → Add site, widget mode "Managed"). Song creation then needs a passed check. Rebuild after setting the site key: it is built into the page.
 - Error tracking: set `NEXT_PUBLIC_SENTRY_DSN`. Paid orders that can't be delivered, amount mismatches, duplicate payments, failed Stripe webhooks and failed songs are reported; set Sentry alerts on them.

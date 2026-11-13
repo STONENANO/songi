@@ -21,6 +21,7 @@ import { downloadToFile, normalizeToMp3 } from "../audio/ffmpeg";
 import { logEvent, setStatus } from "../pipeline/common";
 import { reportError, reportIssue } from "../observability";
 import { sendPurchaseEmail } from "../email";
+import { formatPrice, getCheckoutPrice, getSongPrice, invalidateSongPrice } from "./pricing";
 import { createCheckoutSession, retrieveCheckoutSession, retrieveIntent, verifyEvent, type Stripe } from "./stripe";
 import fs from "node:fs";
 import os from "node:os";
@@ -58,9 +59,11 @@ export async function startCheckout(requestId: string, versionId: string): Promi
     return { ok: true, checkoutUrl: checkoutPath(existing.id), orderId: existing.id, reused: true };
   }
 
+  // The price shown when they clicked; the checkout session records what it actually sells.
+  const price = await getSongPrice();
   const [order] = await db
     .insert(orders)
-    .values({ requestId, versionId, status: "pending", offerId: "song", amountCents: env.songPriceCents, currency: env.currency })
+    .values({ requestId, versionId, status: "pending", offerId: "song", amountCents: price.cents, currency: price.currency })
     .returning();
   await db.update(songVersions).set({ purchaseStatus: "pending" }).where(and(eq(songVersions.id, versionId), ne(songVersions.purchaseStatus, "paid")));
   await logEvent(requestId, "checkout:started", { orderId: order.id, versionId, mock: env.mockPayments });
@@ -70,8 +73,8 @@ export async function startCheckout(requestId: string, versionId: string): Promi
 export type PreparedCheckout =
   | { kind: "paid" }
   | { kind: "closed"; reason: string }
-  | { kind: "test"; free: boolean }
-  | { kind: "stripe"; clientSecret: string; publishableKey: string; tax: boolean; hasEmail: boolean };
+  | { kind: "test"; free: boolean; priceLabel: string }
+  | { kind: "stripe"; clientSecret: string; publishableKey: string; tax: boolean; taxExclusive: boolean; hasEmail: boolean; priceLabel: string };
 
 /**
  * What the checkout page needs for one order: a Checkout Session client secret (created once,
@@ -80,15 +83,22 @@ export type PreparedCheckout =
 export async function prepareCheckout(order: Order): Promise<PreparedCheckout> {
   if (order.status === "paid" || order.status === "paid_unfulfilled") return { kind: "paid" };
   if (order.status !== "pending") return { kind: "closed", reason: order.status };
-  if (env.mockPayments) return env.testCheckoutAllowed ? { kind: "test", free: env.freeDownloads } : { kind: "closed", reason: "payments_not_configured" };
+  if (env.mockPayments) {
+    if (!env.testCheckoutAllowed) return { kind: "closed", reason: "payments_not_configured" };
+    const now = await getSongPrice();
+    return { kind: "test", free: env.freeDownloads, priceLabel: formatPrice(order.amountCents ?? now.cents, order.currency ?? now.currency) };
+  }
 
   const db = await getDb();
-  const stripeMode = (clientSecret: string, hasEmail: boolean): PreparedCheckout => ({
+  // The label is the amount this session sells (the price can change in Stripe between sessions).
+  const stripeMode = (clientSecret: string, hasEmail: boolean, cents: number, currency: string, taxExclusive: boolean): PreparedCheckout => ({
     kind: "stripe",
     clientSecret,
     publishableKey: env.stripe.publishableKey,
     tax: env.stripe.automaticTax,
+    taxExclusive,
     hasEmail,
+    priceLabel: formatPrice(cents, currency),
   });
   if (order.stripeCheckoutSessionId) {
     const cs = await retrieveCheckoutSession(order.stripeCheckoutSessionId);
@@ -97,7 +107,8 @@ export async function prepareCheckout(order: Order): Promise<PreparedCheckout> {
       const result = await applyCompletedSession(cs);
       return result === "fulfilled" || result === "already_paid" ? { kind: "paid" } : { kind: "closed", reason: cs.payment_status === "unpaid" ? "payment_processing" : result };
     }
-    if (cs.status === "open" && cs.client_secret) return stripeMode(cs.client_secret, !!cs.customer_email);
+    if (cs.status === "open" && cs.client_secret)
+      return stripeMode(cs.client_secret, !!cs.customer_email, order.amountCents ?? cs.amount_subtotal ?? 0, order.currency ?? cs.currency ?? env.currency, env.stripe.taxBehavior === "exclusive");
     // Expired: replace it below.
   } else if (order.stripePaymentIntentId) {
     // An order started before Checkout Sessions: if its PaymentIntent already succeeded, finish it.
@@ -111,8 +122,12 @@ export async function prepareCheckout(order: Order): Promise<PreparedCheckout> {
   const [v] = await db.select({ title: songVersions.title }).from(songVersions).where(eq(songVersions.id, order.versionId)).limit(1);
   const forName = r?.name ? ` for ${r.name}` : "";
   let cs;
+  let price;
   try {
+    // The live price: re-read from Stripe unless just fetched; refuses an archived or recurring one.
+    price = await getCheckoutPrice();
     cs = await createCheckoutSession(order, {
+      price,
       email: r?.email,
       productName: v?.title ? `${v.title} (custom song)` : `Custom song${forName}`,
       description: `Custom song${forName}: full song, MP3 download and a permanent link`,
@@ -124,8 +139,9 @@ export async function prepareCheckout(order: Order): Promise<PreparedCheckout> {
     await logEvent(order.requestId, "checkout:unavailable", { orderId: order.id, error: (e as Error).message });
     return { kind: "closed", reason: "checkout_unavailable" };
   }
-  await db.update(orders).set({ stripeCheckoutSessionId: cs.id }).where(eq(orders.id, order.id));
-  return stripeMode(cs.clientSecret, !!r?.email);
+  // Payments are checked against the amount this session sells.
+  await db.update(orders).set({ stripeCheckoutSessionId: cs.id, amountCents: price.cents, currency: price.currency }).where(eq(orders.id, order.id));
+  return stripeMode(cs.clientSecret, !!r?.email, price.cents, price.currency, price.taxBehavior === "exclusive");
 }
 
 /** The fields we rely on from a Stripe Checkout Session (webhook payload or API response). */
@@ -144,7 +160,7 @@ export async function applyCompletedSession(cs: SessionLike): Promise<string> {
   const [row] = await db.select().from(orders).where(eq(orders.id, songOrderId)).limit(1);
   if (!row) return "unknown_song_order";
   if (row.stripeCheckoutSessionId && row.stripeCheckoutSessionId !== cs.id) return "session_mismatch";
-  const expected = row.amountCents ?? env.songPriceCents;
+  const expected = row.amountCents ?? (await getSongPrice()).cents;
   const tax = cs.total_details?.amount_tax ?? 0;
   // The price is checked before tax (tax is Stripe's to add); inclusive pricing keeps the subtotal at the price.
   if ((cs.amount_subtotal ?? 0) < expected || cs.currency !== (row.currency ?? env.currency)) {
@@ -173,7 +189,7 @@ export async function applySucceededIntent(pi: IntentLike): Promise<string> {
   // Orders paid through a Checkout Session are settled by checkout.session.* events, not this one.
   if (row.stripeCheckoutSessionId) return "handled_by_checkout_session";
   if (row.stripePaymentIntentId && row.stripePaymentIntentId !== pi.id) return "intent_mismatch";
-  const expected = row.amountCents ?? env.songPriceCents;
+  const expected = row.amountCents ?? (await getSongPrice()).cents;
   if (pi.amount_received < expected || pi.currency !== (row.currency ?? env.currency)) {
     await logEvent(row.requestId, "order:amount_mismatch", { orderId: row.id, received: pi.amount_received, expected, currency: pi.currency });
     reportIssue("Paid amount does not match the order", { kind: "amount_mismatch", orderId: row.id, received: pi.amount_received, expected, currency: pi.currency });
@@ -241,7 +257,7 @@ export async function payWithTestCheckout(orderId: string): Promise<string> {
   const db = await getDb();
   const [row] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!row) return "unknown_song_order";
-  return markPaid(row, { paymentRef: `test_${row.id}`, paymentIntentId: null, amountCents: env.freeDownloads ? 0 : (row.amountCents ?? env.songPriceCents), currency: row.currency ?? env.currency });
+  return markPaid(row, { paymentRef: `test_${row.id}`, paymentIntentId: null, amountCents: env.freeDownloads ? 0 : (row.amountCents ?? (await getSongPrice()).cents), currency: row.currency ?? (await getSongPrice()).currency });
 }
 
 export type WebhookOutcome = { status: number; result: string };
@@ -284,6 +300,13 @@ export async function handleStripeWebhook(rawBody: string, headers: Headers): Pr
         const piId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
         return { status: 200, result: piId && charge.refunded ? await processRefund(piId) : "partial_or_unknown_refund" };
       }
+      // The price was changed in the Dashboard: show and sell the new one right away.
+      case "product.updated":
+      case "price.created":
+      case "price.updated":
+      case "price.deleted":
+        invalidateSongPrice();
+        return { status: 200, result: "price_refreshed" };
       default:
         return { status: 200, result: "ignored_event" };
     }
