@@ -19,6 +19,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="admin">
+      <p className="muted">
+        <strong>Songs</strong> · <Link href={`/admin/numbers${q}`}>Numbers</Link>
+      </p>
       <h1>Test songs</h1>
       <p className="muted">
         {rows.length} songs · {rated.length} rated{avg !== null ? ` · average ${avg.toFixed(1)} / 5` : ""} · {yes} of {rated.length} would pay · est. spend ${spend.toFixed(2)}
