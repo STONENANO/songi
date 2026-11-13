@@ -1,35 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { cache } from "react";
-import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
-import { getDb, schema } from "@/lib/db";
-import { verifyDeliveryToken, issueMediaToken, mediaUrl } from "@/lib/media/tokens";
-import { normalizeBrief, getGenre } from "@/lib/songcraft";
+import { issueMediaToken, mediaUrl } from "@/lib/media/tokens";
+import { getGenre } from "@/lib/songcraft";
 import { buildLyricSections, timeLyricLines, type StoryLine } from "@/lib/onboarding/lyrics-view";
 import SongPlayer from "./player";
+import { loadSong } from "./song-data";
 
 export const dynamic = "force-dynamic";
-
-/** Everything the song page needs, loaded once per request (page and metadata share it). */
-const loadSong = cache(async (token: string) => {
-  const orderId = verifyDeliveryToken(decodeURIComponent(token));
-  if (!orderId) return null;
-  const db = await getDb();
-  const [order] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId)).limit(1);
-  if (!order || order.status !== "paid" || !order.fulfilledAt) return null;
-  const [v] = await db.select().from(schema.songVersions).where(eq(schema.songVersions.id, order.versionId)).limit(1);
-  const [r] = await db.select().from(schema.songRequests).where(eq(schema.songRequests.id, order.requestId)).limit(1);
-  if (!v?.audioKey || !r) return null;
-  const [gen] = await db.select().from(schema.generations).where(eq(schema.generations.id, v.generationId)).limit(1);
-  const [lyrics] = gen ? await db.select().from(schema.lyricDrafts).where(eq(schema.lyricDrafts.id, gen.lyricDraftId)).limit(1) : [];
-  const brief = normalizeBrief(r.brief);
-  const name = brief?.recipient.name || r.recipientName || "someone special";
-  const quiz = (r.quizSnapshot ?? {}) as Record<string, unknown>;
-  const giver = (typeof quiz.giverName === "string" && quiz.giverName) || brief?.giverName || "";
-  const title = v.title || `${name}'s Song`;
-  return { order, v, r, lyrics, brief, name, giver, title };
-});
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const song = await loadSong((await params).token);
@@ -40,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
     description,
     robots: { index: false, follow: false },
     openGraph: { title: song.title, description, type: "music.song" },
-    twitter: { card: "summary", title: song.title, description },
+    twitter: { card: "summary_large_image", title: song.title, description },
   };
 }
 
