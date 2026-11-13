@@ -151,6 +151,8 @@ export async function getRequestView(requestId: string, access: Access = "owner"
           ? { status: "paid_unfulfilled" as const, versionId: orderRows.find((o) => o.status === "paid_unfulfilled")!.versionId, deliveryLink: null }
           : null,
     feedback: lastFeedback ? { rating: lastFeedback.rating, wouldPay: lastFeedback.wouldPay, note: lastFeedback.note } : null,
+    /** Show the tester feedback box (test mode, or TESTER_FEEDBACK=true). Never shown to paying customers by default. */
+    showFeedback: env.testerFeedback,
     priceLabel: env.freeDownloads ? "free while testing" : (await getSongPrice()).label,
     /**
      * The direct link to these versions (works on any device until expiresAt), for the copy and

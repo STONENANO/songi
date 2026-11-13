@@ -357,7 +357,7 @@ function Versions({ view, song }: { view: RequestView; song: Song }) {
         </Card>
       )}
 
-      <FeedbackCard song={song} versionId={selected?.id ?? null} given={view.feedback} />
+      {view.showFeedback && <FeedbackCard song={song} versionId={selected?.id ?? null} given={view.feedback} priceLabel={view.priceLabel} />}
     </>
   );
 }
@@ -394,7 +394,7 @@ const RATINGS = [
 ];
 
 /** MVP test feedback: how the song landed, and whether the tester would pay for it. */
-function FeedbackCard({ song, versionId, given }: { song: Song; versionId: string | null; given: RequestView["feedback"] }) {
+function FeedbackCard({ song, versionId, given, priceLabel }: { song: Song; versionId: string | null; given: RequestView["feedback"]; priceLabel: string }) {
   const [rating, setRating] = useState<number | null>(given?.rating ?? null);
   const [wouldPay, setWouldPay] = useState<"yes" | "maybe" | "no" | null>((given?.wouldPay as "yes" | "maybe" | "no" | null) ?? null);
   const [note, setNote] = useState(given?.note ?? "");
@@ -413,7 +413,7 @@ function FeedbackCard({ song, versionId, given }: { song: Song; versionId: strin
           ))}
         </Chips>
       </div>
-      <p className="ui-mt ui-field__label">Would you pay $45 for this as a gift?</p>
+      <p className="ui-mt ui-field__label">Would you pay {/^\$/.test(priceLabel) ? priceLabel : "for this"} as a gift?</p>
       <div className="ui-mt">
         <Chips>
           {(["yes", "maybe", "no"] as const).map((w) => (
