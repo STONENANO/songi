@@ -13,8 +13,8 @@ export const BRAND = {
  * built from the song (app/d/[token]).
  */
 export const SHARE = {
-  title: "A song written from your story",
-  description: "Tell us about someone you love. We write and record an original song about them. Hear it free before you buy.",
+  title: "Make them cry happy tears",
+  description: "Tell us the little things only you know. We turn them into an original song about them, and you hear it free before you pay.",
   /** Small line above the title on the home page image. */
-  eyebrow: "Custom songs for the people you love",
+  eyebrow: "A custom song, written from your story",
 };
