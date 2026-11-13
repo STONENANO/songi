@@ -9,6 +9,8 @@ COPY . .
 # service variables with these names to the build automatically.
 ARG NEXT_PUBLIC_POSTHOG_KEY
 ARG NEXT_PUBLIC_POSTHOG_HOST
+# Browser error tracking (Sentry): the DSN is public by design and baked into the browser code.
+ARG NEXT_PUBLIC_SENTRY_DSN
 RUN npm run build
 ENV NODE_ENV=production PORT=4747
 EXPOSE 4747
