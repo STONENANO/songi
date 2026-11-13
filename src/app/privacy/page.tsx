@@ -6,7 +6,7 @@ import { LegalPage, SupportLink, legalEntity } from "@/components/legal";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Privacy Policy", alternates: { canonical: "/privacy" } };
 
-/* DRAFT: have a lawyer review before relying on it. Keep the provider list in step with the code. */
+/* Decisions (Nov 2026): seller "Cryworthy", based in Georgia, USA. Keep the provider list in step with the code. */
 export default function Privacy() {
   const brand = BRAND.name;
   return (
@@ -47,7 +47,7 @@ export default function Privacy() {
         <li>PostHog (analytics) and Sentry (error reports, with story text and emails removed).</li>
         <li>Our email provider: sends your links.</li>
       </ul>
-      <p>These providers may process data in the United States and other countries.</p>
+      <p>We&rsquo;re based in Georgia, USA. These providers may process data in the United States and other countries.</p>
 
       <h2>How long we keep it</h2>
       <p>

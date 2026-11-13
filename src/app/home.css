@@ -128,8 +128,6 @@ body:has(.home)::before { display: none; }
 .home-final .home-h2 { max-width: none; font-size: clamp(40px, 7vw, 80px); }
 .home-final__img { width: 104px; animation: home-drift 6s ease-in-out infinite; --r: -5deg; }
 
-.home-foot { border-top: 1px solid var(--color-border); padding-block: var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
-.home-foot .home-brand { font-size: var(--text-md); }
 
 /* ---------- Narrow screens ---------- */
 @media (max-width: 900px) {
