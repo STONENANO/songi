@@ -41,7 +41,7 @@ test("Sentry is off without a DSN, errors-only with one, and never sends default
   const on = sentryOptions("https://k@o1.ingest.us.sentry.io/2", "production");
   assert.equal(on.enabled, true);
   assert.equal(on.sendDefaultPii, false);
-  assert.equal(on.tracesSampleRate, 0);
+  assert.ok(!("tracesSampleRate" in on), "tracing fully off (unset), not on at 0%");
 });
 
 test("reporting works with Sentry off (logs only, never throws)", () => {

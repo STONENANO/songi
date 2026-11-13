@@ -6,6 +6,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { sentryOptions } from "./lib/observability-scrub";
 
-Sentry.init(sentryOptions(process.env.NEXT_PUBLIC_SENTRY_DSN, process.env.NODE_ENV === "production" ? "production" : "development"));
+if (process.env.NEXT_PUBLIC_SENTRY_DSN) Sentry.init(sentryOptions(process.env.NEXT_PUBLIC_SENTRY_DSN, process.env.NODE_ENV === "production" ? "production" : "development"));
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
