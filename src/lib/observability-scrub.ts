@@ -48,8 +48,9 @@ export function sentryOptions(dsn: string | undefined, environment: string) {
     dsn: dsn || undefined,
     enabled: !!dsn,
     environment,
-    // Errors only: no performance tracing, no session replay, no default PII.
-    tracesSampleRate: 0,
+    // Errors only: tracesSampleRate is left unset, which turns tracing off entirely (0 would
+    // still switch tracing on and attach trace headers to every outgoing request).
+    // No session replay, no default PII.
     sendDefaultPii: false,
     beforeSend: scrubEvent,
   };

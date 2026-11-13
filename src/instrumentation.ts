@@ -8,8 +8,11 @@ import * as Sentry from "@sentry/nextjs";
 export async function register() {
   // Compile-time constant: the edge build drops this branch and its Node-only imports.
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { sentryOptions } = await import("./lib/observability-scrub");
-    Sentry.init(sentryOptions(process.env.NEXT_PUBLIC_SENTRY_DSN, process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "development"));
+    // Without a DSN Sentry isn't started at all (its instrumentation would only add log noise).
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      const { sentryOptions } = await import("./lib/observability-scrub");
+      Sentry.init(sentryOptions(process.env.NEXT_PUBLIC_SENTRY_DSN, process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || "development"));
+    }
     const { startupChecks } = await import("./instrumentation-node");
     await startupChecks();
   }
