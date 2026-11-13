@@ -61,7 +61,10 @@ export default function PayForm({ orderId, requestId, mode, priceLabel, email }:
             },
           },
         },
-        defaultValues: email ? { email } : undefined,
+        // Only prefill when the session has no email: the server already sets customer_email when it
+        // knows it, and Stripe refuses to change that ("You cannot update the email..."), which stops
+        // the payment form from loading at all.
+        defaultValues: email && !mode.hasEmail ? { email } : undefined,
       });
       // Totals update live: Stripe Tax recalculates as the buyer enters their address.
       sdk.on("change", (session) => setTotals(totalsOf(session)));
@@ -69,10 +72,11 @@ export default function PayForm({ orderId, requestId, mode, priceLabel, email }:
       if (mode.tax && addressRef.current) sdk.createBillingAddressElement().mount(addressRef.current);
       const payment = sdk.createPaymentElement({ layout: "tabs" });
       payment.on("ready", () => setReady(true));
+      payment.on("loaderror", (e) => setError(e.error?.message || "The payment form couldn't load. Please refresh the page."));
       payment.mount(payRef.current);
-      const loaded = await sdk.loadActions();
+      const loaded = await sdk.loadActions().catch((e: Error) => ({ type: "error" as const, error: { message: e.message, code: null } }));
       if (cancelled) return;
-      if (loaded.type === "error") return setError(loaded.error.message);
+      if (loaded.type === "error") return setError(loaded.error.message || "The payment form couldn't load. Please refresh the page.");
       actionsRef.current = loaded.actions;
       setTotals(totalsOf(loaded.actions.getSession()));
     })();
@@ -86,6 +90,16 @@ export default function PayForm({ orderId, requestId, mode, priceLabel, email }:
   async function pay() {
     setBusy(true);
     setError(null);
+    try {
+      await payOnce();
+    } catch (e) {
+      // Never leave the buyer with a button that does nothing.
+      setError((e as Error)?.message || "Something went wrong. Please try again.");
+      setBusy(false);
+    }
+  }
+
+  async function payOnce() {
     if (mode.kind === "test") {
       const res = await fetch("/api/dev/mock-pay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId }) }).catch(() => null);
       if (!res?.ok) {
@@ -97,7 +111,11 @@ export default function PayForm({ orderId, requestId, mode, priceLabel, email }:
       return;
     }
     const actions = actionsRef.current;
-    if (!actions) return setBusy(false);
+    if (!actions) {
+      setError("The payment form is still loading. Please wait a moment and try again, or refresh the page.");
+      setBusy(false);
+      return;
+    }
     if (!mode.hasEmail) {
       const upd = await actions.updateEmail(buyerEmail.trim());
       if (upd.type === "error") {
@@ -107,11 +125,14 @@ export default function PayForm({ orderId, requestId, mode, priceLabel, email }:
       }
     }
     // Stripe handles 3-D Secure and wallet sheets, then returns the buyer to our post-purchase page.
-    const result = await actions.confirm();
+    // Stripe redirects to the return URL itself; if it doesn't need to, we go there ourselves.
+    const result = await actions.confirm({ redirect: "if_required" });
     if (result.type === "error") {
       setError(result.error.message || "Your payment didn't go through. Please try again.");
       setBusy(false);
+      return;
     }
+    router.push(`/checkout/${orderId}/complete`);
   }
 
   const payLabel = totals ? `Pay ${totals.total}` : `Pay ${priceLabel}`;
