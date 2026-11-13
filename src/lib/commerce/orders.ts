@@ -20,6 +20,7 @@ import { assertSafeAudioUrl } from "../kie/client";
 import { downloadToFile, normalizeToMp3 } from "../audio/ffmpeg";
 import { logEvent, setStatus } from "../pipeline/common";
 import { reportError, reportIssue } from "../observability";
+import { sendPurchaseEmail } from "../email";
 import { createCheckoutSession, retrieveCheckoutSession, retrieveIntent, verifyEvent, type Stripe } from "./stripe";
 import fs from "node:fs";
 import os from "node:os";
@@ -317,6 +318,7 @@ export async function fulfil(order: Order): Promise<string> {
   await db.update(orders).set({ fulfilledAt: new Date(), status: "paid" }).where(eq(orders.id, order.id));
   await setStatus(order.requestId, "purchased", { selectedVersionId: v.id });
   await logEvent(order.requestId, "order:fulfilled", { orderId: order.id, versionId: v.id });
+  await sendPurchaseEmail(order.id);
   return "fulfilled";
 }
 

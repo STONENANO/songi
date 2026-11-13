@@ -9,6 +9,7 @@
 import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { Floaters } from "./home-floaters";
+import { SiteFooter } from "@/components/legal";
 import "./home.css";
 
 export const dynamic = "force-dynamic"; // the price comes from server env
@@ -61,7 +62,6 @@ const COPY = {
     ],
   },
   final: { title: "Closing headline placeholder", sub: "Closing subline placeholder." },
-  footer: "Footer line placeholder.",
 };
 
 export default function Home() {
@@ -207,10 +207,7 @@ export default function Home() {
         </a>
       </section>
 
-      <footer className="home-foot">
-        <span className="home-brand">{BRAND.name}</span>
-        <span>{COPY.footer}</span>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

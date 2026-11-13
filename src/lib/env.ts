@@ -334,6 +334,11 @@ export const env = {
     return { provider, postmark, resend, from, enabled: !!provider && !!from };
   },
 
+  /** Customer support address, shown in the site footer, legal pages and the purchase email. */
+  get supportEmail(): string {
+    return (process.env.SUPPORT_EMAIL ?? "").trim();
+  },
+
   /* ---------------- Abuse and spend control ---------------- */
   /**
    * Header that carries the visitor's IP, set by our host's proxy (never by the visitor).
