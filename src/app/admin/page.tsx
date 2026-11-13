@@ -1,17 +1,16 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { adminAllowed, adminList } from "@/lib/admin";
+import { adminList } from "@/lib/admin";
+import { requireAdmin } from "@/lib/auth/admin-session";
+import { AdminNav } from "./nav";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const PAY: Record<string, string> = { yes: "Yes", maybe: "Maybe", no: "No" };
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const { token } = await searchParams;
-  if (!adminAllowed(token)) notFound();
+export default async function AdminPage() {
+  const { email } = await requireAdmin();
   const rows = await adminList();
-  const q = token ? `?token=${encodeURIComponent(token)}` : "";
   const rated = rows.filter((r) => r.feedback);
   const avg = rated.length ? rated.reduce((s, r) => s + r.feedback!.rating, 0) / rated.length : null;
   const yes = rated.filter((r) => r.feedback!.wouldPay === "yes").length;
@@ -19,6 +18,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="admin">
+      <AdminNav current="songs" email={email} />
       <h1>Test songs</h1>
       <p className="muted">
         {rows.length} songs · {rated.length} rated{avg !== null ? ` · average ${avg.toFixed(1)} / 5` : ""} · {yes} of {rated.length} would pay · est. spend ${spend.toFixed(2)}
@@ -47,7 +47,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   <div className="muted">{r.relationship} · {r.occasion.replace(/_/g, " ")} · {r.genre}</div>
                 </td>
                 <td>
-                  <Link href={`/admin/${r.id}${q}`}>{r.title ?? "(no lyrics yet)"}</Link>
+                  <Link href={`/admin/${r.id}`}>{r.title ?? "(no lyrics yet)"}</Link>
                   <div className="muted">{r.writer ?? ""}</div>
                 </td>
                 <td>{r.status}{r.paid ? " · paid" : ""}</td>

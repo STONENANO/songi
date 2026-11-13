@@ -73,9 +73,34 @@ export const env = {
   get lyricDrafts(): number {
     return Math.max(1, Math.min(2, num(process.env.LYRIC_DRAFTS, 2)));
   },
-  /** Opens /admin. Required in production; optional locally. */
+  /** Opens the admin API (GET /api/admin/ip). The /admin pages use the Supabase sign-in below instead. */
   get adminToken(): string {
     return process.env.ADMIN_TOKEN ?? "";
+  },
+
+  /* ---------------- Admin sign-in (Supabase Auth) ---------------- */
+  /** Supabase project URL (https://<ref>.supabase.co). Only its Auth is used, for the /admin sign-in. */
+  get supabaseUrl(): string {
+    return (process.env.SUPABASE_URL ?? "").replace(/\/$/, "");
+  },
+  /** The project's publishable key (sb_publishable_...) or legacy anon key. Public by design. */
+  get supabasePublishableKey(): string {
+    return process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "";
+  },
+  /**
+   * How admins sign in. email (default): Supabase emails a one-time sign-in link, no other setup.
+   * google / github: that provider must be enabled in Supabase -> Authentication -> Sign In / Providers.
+   */
+  get adminAuthProvider(): "email" | "google" | "github" {
+    const v = process.env.ADMIN_AUTH_PROVIDER;
+    return v === "google" || v === "github" ? v : "email";
+  },
+  /** The only accounts allowed into /admin (comma-separated, any case). Empty = nobody. */
+  get adminEmails(): string[] {
+    return list(process.env.ADMIN_EMAILS, []).map((e) => e.toLowerCase());
+  },
+  get adminLoginConfigured(): boolean {
+    return !!(this.supabaseUrl && this.supabasePublishableKey);
   },
   /** Automatic lyric repair passes after the first draft. */
   get lyricMaxRepairs(): number {
@@ -237,6 +262,10 @@ export const env = {
   get songPriceCents(): number {
     return num(process.env.SONG_PRICE_CENTS, 3900);
   },
+  /** Stripe's fee, for the margin estimates in /admin/numbers (US cards: 2.9% + 30¢). Check your Stripe pricing. */
+  get stripeFee(): { percent: number; fixedCents: number } {
+    return { percent: num(process.env.STRIPE_FEE_PERCENT, 2.9), fixedCents: num(process.env.STRIPE_FEE_FIXED_CENTS, 30) };
+  },
   get currency(): string {
     return (process.env.SONG_CURRENCY ?? "usd").toLowerCase();
   },
@@ -365,6 +394,9 @@ export function productionConfigProblems(): string[] {
   if ((set("POSTMARK_SERVER_TOKEN") || set("RESEND_API_KEY")) !== set("EMAIL_FROM")) problems.push("Email needs EMAIL_FROM and one of POSTMARK_SERVER_TOKEN or RESEND_API_KEY (or none of them).");
   // Half a Turnstile setup means no bot check at all: say so instead of running unprotected.
   if (set("NEXT_PUBLIC_TURNSTILE_SITE_KEY") !== set("TURNSTILE_SECRET_KEY")) problems.push("Turnstile needs both NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY (or neither).");
+  // A half-configured admin sign-in would lock everyone out of /admin without saying why.
+  const adminLogin = [set("SUPABASE_URL"), !!env.supabasePublishableKey, set("ADMIN_EMAILS")];
+  if (adminLogin.some(Boolean) && !adminLogin.every(Boolean)) problems.push("The /admin sign-in needs SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and ADMIN_EMAILS (or none of them).");
   if (env.storageDriver === "s3") {
     const missing = ["S3_BUCKET", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"].filter((k) => !set(k));
     if (missing.length) problems.push(`STORAGE_DRIVER=s3 needs ${missing.join(", ")}.`);

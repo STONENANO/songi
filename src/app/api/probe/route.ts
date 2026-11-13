@@ -4,6 +4,8 @@ import { probeAnswer, mockProbe } from "@/lib/songcraft/probe";
 import { env } from "@/lib/env";
 import { rateLimit, clientIp } from "@/lib/http/rate-limit";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
+import { withUsage } from "@/lib/llm/client";
+import { recordLlmUsage } from "@/lib/pipeline/common";
 
 export const runtime = "nodejs";
 
@@ -28,7 +30,10 @@ export async function POST(req: Request) {
   const allowed = (await rateLimit(`probe:${clientIp(req)}`, env.isProd ? 40 : 1000, 60 * 60_000)) && (env.maxProbesPerDay <= 0 || (await rateLimit("probe:site", env.maxProbesPerDay, 24 * 60 * 60_000)));
   if (!allowed) return NextResponse.json(mockProbe(parsed.data));
   try {
-    return NextResponse.json(await probeAnswer(parsed.data));
+    const { result, usage } = await withUsage(() => probeAnswer(parsed.data));
+    // These calls happen before a song exists; they count toward cost per buyer in /admin/numbers.
+    await recordLlmUsage(null, usage).catch((e) => console.warn("[probe] cost not recorded:", e instanceof Error ? e.message : e));
+    return NextResponse.json(result);
   } catch (e) {
     console.warn("[probe] falling back:", e instanceof Error ? e.message : e);
     return NextResponse.json(mockProbe(parsed.data));

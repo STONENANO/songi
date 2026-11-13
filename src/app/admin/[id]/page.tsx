@@ -1,21 +1,23 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { adminAllowed, adminDetail } from "@/lib/admin";
+import { adminDetail } from "@/lib/admin";
+import { requireAdmin } from "@/lib/auth/admin-session";
+import { AdminNav } from "../nav";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export default async function AdminSong({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ token?: string }> }) {
-  const [{ id }, { token }] = await Promise.all([params, searchParams]);
-  if (!adminAllowed(token)) notFound();
+export default async function AdminSong({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { email } = await requireAdmin();
   const d = await adminDetail(id);
   if (!d) notFound();
-  const q = token ? `?token=${encodeURIComponent(token)}` : "";
   const r = d.request;
 
   return (
     <div className="admin">
-      <p><Link href={`/admin${q}`}>← All test songs</Link></p>
+      <AdminNav current={null} email={email} />
+      <p><Link href="/admin">← All test songs</Link></p>
       <h1>{d.draft?.title ?? "(no lyrics yet)"}</h1>
       <p className="muted">
         For {r.recipient ?? "(no name)"}{r.pronunciation ? ` (say "${r.pronunciation}")` : ""} · {r.relationship} · {r.occasion.replace(/_/g, " ")} · {r.genre} · {r.vocal} vocal{r.mood ? ` · ${r.mood}` : ""} · status {r.status}

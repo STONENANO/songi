@@ -1,6 +1,6 @@
 /**
  * Read-only data for the /admin pages: every test song with its lyrics,
- * takes, costs and tester feedback. Access is checked by adminAllowed().
+ * takes, costs and tester feedback. Pages check access with requireAdmin().
  */
 import crypto from "node:crypto";
 import { desc, eq, inArray } from "drizzle-orm";
@@ -11,7 +11,7 @@ import { issueMediaToken, mediaUrl } from "./media/tokens";
 
 const { songRequests, lyricDrafts, songVersions, generations, orders, feedback, costLedger, events } = schema;
 
-/** ADMIN_TOKEN is required in production. Locally, /admin is open when no token is set. */
+/** For the admin API (ADMIN_TOKEN). The /admin pages use the sign-in in lib/auth/admin-session.ts. Locally open when no token is set. */
 export function adminAllowed(token: string | undefined): boolean {
   const want = env.adminToken;
   if (!want) return !env.isProd;
