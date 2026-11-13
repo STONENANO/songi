@@ -51,7 +51,8 @@ export async function getRequest(id: string): Promise<SongRequest | null> {
 }
 
 /** Record LLM calls (actual tokens, estimated dollars) against a request. */
-export async function recordLlmUsage(requestId: string, usage: LlmUsage[]) {
+/** requestId null = a call made before the song exists (the quiz's follow-up questions). */
+export async function recordLlmUsage(requestId: string | null, usage: LlmUsage[]) {
   if (!usage.length) return;
   const db = await getDb();
   await db.insert(costLedger).values(

@@ -102,6 +102,20 @@ The customer pages (quiz and song page) are built to be re-skinned without touch
 Each song costs roughly $0.50 to $0.80 in Claude calls (two first drafts, checks, sometimes a polish pass) plus two
 Kie tasks for three takes. Note your Kie credits before and after the first song.
 
+## Unit economics (/admin/numbers)
+
+`/admin/numbers?token=YOUR_ADMIN_TOKEN` shows, for songs started in the last 7, 30 or 90 days or all time:
+the funnel from finished quiz to paid, conversion rates, money (charged, tax, refunds, estimated Stripe fees,
+net revenue), AI cost split into Kie, Claude and the quiz's follow-up questions, and cost and profit per buyer.
+Its break-even line says how many previewed songs one sale pays for. Enter the period's ad spend to see cost to
+acquire a buyer, return on ad spend and profit after ads. Tables split it all by week and by occasion.
+
+- Only real Stripe payments count as sales; free test unlocks are listed separately.
+- AI costs are the cost ledger's estimates (`KIE_TASK_COST_USD`, `LLM_*_COST_PER_MTOK`). Check them against
+  your Kie.ai and Anthropic bills. Stripe fees use `STRIPE_FEE_PERCENT` and `STRIPE_FEE_FIXED_CENTS`.
+- The quiz's follow-up questions are recorded in the cost ledger without a song (they run before one exists),
+  so people who leave the quiz still count toward cost per buyer.
+
 ## Analytics (PostHog)
 
 Funnels, quiz drop-off, traffic sources and session replay. Off until `NEXT_PUBLIC_POSTHOG_KEY` is set
@@ -116,7 +130,8 @@ takes it as a build arg. Use `NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com`
   `relationship` and `genre`. The quiz sends the visitor's PostHog id with the song, so these join that visitor's funnel.
 - Events go through `/ingest` on our own domain (see `next.config.ts`), so fewer are lost to ad blockers.
 - Every event is still written to our own `events` table too. Costs and margins come from the database
-  (`npm run metrics`), not PostHog.
+  (`/admin/numbers`), not PostHog. The "Cryworthy: conversion" dashboard in PostHog holds the main funnel,
+  quiz drop-off by screen, previews to purchase, conversion by `utm_source`, daily volume and revenue.
 
 Main funnel: `quiz:step_view` -> `quiz:submitted` -> `status:preview_ready` -> `preview_play` ->
 `candidate:selected` -> `checkout:started` -> `order:paid`. For quiz drop-off, break down `quiz:step_view` by `step`.

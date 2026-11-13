@@ -237,6 +237,10 @@ export const env = {
   get songPriceCents(): number {
     return num(process.env.SONG_PRICE_CENTS, 3900);
   },
+  /** Stripe's fee, for the margin estimates in /admin/numbers (US cards: 2.9% + 30¢). Check your Stripe pricing. */
+  get stripeFee(): { percent: number; fixedCents: number } {
+    return { percent: num(process.env.STRIPE_FEE_PERCENT, 2.9), fixedCents: num(process.env.STRIPE_FEE_FIXED_CENTS, 30) };
+  },
   get currency(): string {
     return (process.env.SONG_CURRENCY ?? "usd").toLowerCase();
   },
