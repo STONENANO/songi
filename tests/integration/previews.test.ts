@@ -258,6 +258,7 @@ test("purchase email: the permanent song link, once per order, with the support 
     assert.deepEqual(m.sent[0].body.to, ["payer@example.com"]);
     assert.ok(String(m.sent[0].body.text).includes(`/d/${deliveryToken(orderId)}`));
     assert.match(String(m.sent[0].body.text), /help@example\.com/);
+    assert.equal(m.sent[0].body.reply_to, "help@example.com", "replies reach a real inbox, not the sending address");
     assert.equal(await sendPurchaseEmail(orderId, m.fetchImpl), "already_sent");
     assert.equal(m.sent.length, 1);
   });

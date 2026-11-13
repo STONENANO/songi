@@ -42,13 +42,13 @@ export async function sendEmail(m: Mail, fetchImpl: typeof fetch = fetch): Promi
       ? await fetchImpl("https://api.postmarkapp.com/email", {
           method: "POST",
           headers: { "X-Postmark-Server-Token": c.postmark, "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ From: c.from, To: m.to, Subject: m.subject, TextBody: m.text, HtmlBody: m.html, MessageStream: "outbound" }),
+          body: JSON.stringify({ From: c.from, To: m.to, Subject: m.subject, TextBody: m.text, HtmlBody: m.html, MessageStream: "outbound", ...(env.supportEmail ? { ReplyTo: env.supportEmail } : {}) }),
           signal: AbortSignal.timeout(15_000),
         })
       : await fetchImpl("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${c.resend}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: c.from, to: [m.to], subject: m.subject, text: m.text, html: m.html }),
+          body: JSON.stringify({ from: c.from, to: [m.to], subject: m.subject, text: m.text, html: m.html, ...(env.supportEmail ? { reply_to: env.supportEmail } : {}) }),
           signal: AbortSignal.timeout(15_000),
         });
   if (!res.ok) throw new Error(`${c.provider} answered HTTP ${res.status}`);
