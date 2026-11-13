@@ -4,12 +4,14 @@ import { getDb, schema } from "../db";
 import type { RequestStatus, SongRequest } from "../db/schema";
 import type { LlmUsage } from "../llm/client";
 import { reportError } from "../observability";
+import { forwardEvent } from "../analytics/server";
 
 const { songRequests, events, costLedger } = schema;
 
 export async function logEvent(requestId: string | null, type: string, payload: Record<string, unknown> = {}) {
   const db = await getDb();
   await db.insert(events).values({ requestId, type, payload });
+  void forwardEvent(requestId, type, payload);
 }
 
 export async function setStatus(requestId: string, status: RequestStatus, extra: Partial<typeof songRequests.$inferInsert> = {}) {

@@ -102,6 +102,25 @@ The customer pages (quiz and song page) are built to be re-skinned without touch
 Each song costs roughly $0.50 to $0.80 in Claude calls (two first drafts, checks, sometimes a polish pass) plus two
 Kie tasks for three takes. Note your Kie credits before and after the first song.
 
+## Analytics (PostHog)
+
+Funnels, quiz drop-off, traffic sources and session replay. Off until `NEXT_PUBLIC_POSTHOG_KEY` is set
+(the project API key, `phc_...`, from PostHog -> Settings -> Project). Set it before building: the Dockerfile
+takes it as a build arg. Use `NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com` for an EU project.
+
+- The browser sends page views, every `quiz:*` event (step views, skips, submitted) and session replays.
+  Replays mask everything typed. `/admin` and `/dev` are never tracked.
+- The server sends the rest, so ad blockers can't drop them: `status:needs_input`, `status:preview_ready`,
+  `status:failed`, `preview_play`, `preview_complete`, `candidate:selected`, `checkout:started`, `order:paid`
+  (with `revenue`, before tax), `order:payment_failed`, `order:refunded`. Each carries `request_id`, `occasion`,
+  `relationship` and `genre`. The quiz sends the visitor's PostHog id with the song, so these join that visitor's funnel.
+- Events go through `/ingest` on our own domain (see `next.config.ts`), so fewer are lost to ad blockers.
+- Every event is still written to our own `events` table too. Costs and margins come from the database
+  (`npm run metrics`), not PostHog.
+
+Main funnel: `quiz:step_view` -> `quiz:submitted` -> `status:preview_ready` -> `preview_play` ->
+`candidate:selected` -> `checkout:started` -> `order:paid`. For quiz drop-off, break down `quiz:step_view` by `step`.
+
 ## Stripe Tax
 
 Checkout is a Stripe Checkout Session shown inside our page (`ui_mode: "elements"`), so turning on tax is one setting: `automatic_tax`. When `STRIPE_AUTOMATIC_TAX=true`, the checkout adds an address form, and Stripe works out the tax from that address and adds it on top of the price (`STRIPE_TAX_BEHAVIOR=exclusive`). Stripe also records each sale for tax reports and reverses the tax on refunds. Before turning it on:
