@@ -4,7 +4,8 @@ import { runLyrics, submitEditedLyrics, maybeAutoRecord } from "@/lib/pipeline/r
 import { requireProject } from "@/lib/http/guard";
 import { claimStatus } from "@/lib/pipeline/common";
 import { checkAction, ALREADY_ON_IT } from "@/lib/pipeline/states";
-import { rateLimit } from "@/lib/session/project";
+import { rateLimit } from "@/lib/http/rate-limit";
+import { lyricRewriteAllowance, recordRewrite } from "@/lib/pipeline/spend";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
@@ -27,11 +28,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (g.r.status === "failed" && !retryAfterFailure) return NextResponse.json({ error: "Something went wrong with this song. Please start a new one." }, { status: 409 });
   const check = checkAction("rewrite", g.r.status);
   if (!check.ok) return check.already ? NextResponse.json({ ok: true, already: true, message: ALREADY_ON_IT }) : NextResponse.json({ error: check.message }, { status: 409 });
-  if (!rateLimit(`lyrics:${id}`, 8, 60 * 60_000)) return NextResponse.json({ error: "You've asked for a lot of new lyrics. Please try again later." }, { status: 429 });
+  if (!(await rateLimit(`lyrics:${id}`, 8, 60 * 60_000))) return NextResponse.json({ error: "You've asked for a lot of new lyrics. Please try again later." }, { status: 429 });
+  // Lasting per-song limit on Claude spend (count of rewrites and estimated dollars).
+  const allowance = await lyricRewriteAllowance(id);
+  if (!allowance.ok) return NextResponse.json({ error: allowance.error }, { status: 429 });
 
   if (parsed.data.action === "regenerate") {
     // Record "writing" before replying, so the page moves on at once and a second click is a no-op.
     if (!(await claimStatus(id, [g.r.status], "writing_lyrics"))) return NextResponse.json({ ok: true, already: true, message: ALREADY_ON_IT });
+    await recordRewrite(id, "regenerate");
     after(async () => {
       await runLyrics(id, { source: "regenerated" });
       // Story-quiz songs that never got to record go straight on to recording, as they would have.
@@ -39,6 +44,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     });
     return NextResponse.json({ ok: true });
   }
+  await recordRewrite(id, "edit");
   const result = await submitEditedLyrics(id, parsed.data.text);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json(result);

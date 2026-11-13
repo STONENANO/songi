@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { getDb, schema } from "@/lib/db";
-import { rateLimit, clientIp } from "@/lib/session/project";
+import { rateLimit, clientIp } from "@/lib/http/rate-limit";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const body = await readJson(req, BODY_LIMITS.track);
   if (!body.ok) return body.response;
   const parsed = Body.safeParse(body.data);
-  if (!parsed.success || !rateLimit(`track:${clientIp(req)}`, 300, 60 * 60_000)) return new NextResponse(null, { status: 204 });
+  if (!parsed.success || !(await rateLimit(`track:${clientIp(req)}`, 300, 60 * 60_000))) return new NextResponse(null, { status: 204 });
   const { type, sessionId, requestId, payload } = parsed.data;
   try {
     const db = await getDb();

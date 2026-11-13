@@ -2,7 +2,7 @@
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import { checkAccess } from "../session/project";
+import { canUseSong, checkAccess } from "../session/project";
 import { normalizeBrief } from "../songcraft";
 
 export async function loadCheckout(orderId: string) {
@@ -17,5 +17,5 @@ export async function loadCheckout(orderId: string) {
   const h = await headers();
   const access = checkAccess(new Request("http://checkout.local/", { headers: { cookie: h.get("cookie") ?? "" } }), r);
   const name = normalizeBrief(r.brief)?.recipient.name || r.recipientName || "your loved one";
-  return { order, request: r, version: v, name, owner: access !== "denied" };
+  return { order, request: r, version: v, name, owner: canUseSong(access) };
 }

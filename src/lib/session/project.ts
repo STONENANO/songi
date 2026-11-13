@@ -8,6 +8,7 @@
  */
 import crypto from "node:crypto";
 import { env } from "../env";
+import { previewLinkCookieName, verifyPreviewLink } from "./preview-link";
 
 export function newProjectToken(): { token: string; hash: string } {
   const token = crypto.randomBytes(32).toString("base64url");
@@ -36,31 +37,33 @@ function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
-export type Access = "owner" | "legacy" | "denied";
+/**
+ * owner: this browser made the song (cookie, or a ?k= claim token).
+ * link: a valid direct preview link (?p= or its cookie); same rights as the owner until it expires.
+ * link_expired: only an expired preview link was presented.
+ * legacy: the song predates access tokens. denied: anything else.
+ */
+export type Access = "owner" | "link" | "link_expired" | "legacy" | "denied";
 
-/** Owner if the cookie (or ?k= claim token) matches; legacy if the project predates tokens. */
-export function checkAccess(req: Request, project: { id: string; accessTokenHash: string | null }): Access {
+/** Access that may see and act on the song (listen, choose, buy). */
+export function canUseSong(access: Access): boolean {
+  return access === "owner" || access === "link" || access === "legacy";
+}
+
+export function checkAccess(req: Request, project: { id: string; accessTokenHash: string | null }, nowMs = Date.now()): Access {
   if (!project.accessTokenHash) return "legacy";
   const url = new URL(req.url);
-  const token = readCookie(req.headers.get("cookie"), cookieName(project.id)) ?? url.searchParams.get("k");
-  if (!token) return "denied";
-  const h = hashToken(token);
-  return h.length === project.accessTokenHash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(project.accessTokenHash)) ? "owner" : "denied";
-}
-
-/** In-memory fixed-window rate limiter. Per-process only; replace with a shared store for multi-instance deploys. */
-const buckets = new Map<string, { count: number; reset: number }>();
-export function rateLimit(key: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-  const b = buckets.get(key);
-  if (!b || b.reset < now) {
-    buckets.set(key, { count: 1, reset: now + windowMs });
-    return true;
+  const cookies = req.headers.get("cookie");
+  const token = readCookie(cookies, cookieName(project.id)) ?? url.searchParams.get("k");
+  if (token) {
+    const h = hashToken(token);
+    if (h.length === project.accessTokenHash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(project.accessTokenHash))) return "owner";
   }
-  b.count++;
-  return b.count <= limit;
-}
-
-export function clientIp(req: Request): string {
-  return (req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "local").trim();
+  const link = url.searchParams.get("p") ?? readCookie(cookies, previewLinkCookieName(project.id));
+  if (link) {
+    const check = verifyPreviewLink(link, project.id, nowMs);
+    if (check.status === "valid") return "link";
+    if (check.status === "expired") return "link_expired";
+  }
+  return "denied";
 }

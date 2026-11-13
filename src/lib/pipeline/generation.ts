@@ -25,6 +25,8 @@ import { buildKieInput, draftIsSingable, genreArchetypes, getGenre, normalizeBri
 import { AmbiguousSubmitError, callbackUrl, createMusicTask, getTaskStatus, KieError } from "../kie/client";
 import { logEvent, setStatus, failRequest, getRequest } from "./common";
 import { processTrack } from "./process";
+import { reportError } from "../observability";
+import { sendPreviewLinkEmail } from "../email";
 
 const { songRequests, lyricDrafts, generations, songVersions, costLedger } = schema;
 
@@ -270,7 +272,7 @@ export async function collectTask(generationId: string): Promise<void> {
     try {
       if (await processTrack({ request: r, generation: gen, draft, track })) usable++;
     } catch (e) {
-      console.error(`[pipeline] track ${track.id} failed`, e);
+      reportError(e, { where: "process_track", trackId: track.id, generationId: gen.id });
       await logEvent(gen.requestId, "version:error", { audioId: track.id, error: (e as Error).message });
     }
   }
@@ -353,6 +355,8 @@ async function finalize(r: SongRequest, draftId: string): Promise<void> {
     usable: ordered.usable,
     randomized: env.randomizeCandidateOrder,
   });
+  // The direct preview link, by email (once per song; a no-op until email is configured).
+  await sendPreviewLinkEmail(r.id);
 }
 
 /** Decide what happens next for the active round. Called after every task completes or fails. */

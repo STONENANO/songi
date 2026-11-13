@@ -259,9 +259,73 @@ export const env = {
   get testCheckoutAllowed(): boolean {
     return this.mockPayments && (!this.isProd || this.freeDownloads);
   },
-  /** Site-wide cap on new songs per rolling 24 hours (protects the API bill). 0 = no cap. */
+  /**
+   * Optional site-wide cap on new songs per rolling 24 hours. 0 (the default) = no cap.
+   * Added for the open test site; per-visitor, per-email and bot checks now do this job.
+   */
   get maxSongsPerDay(): number {
-    return num(process.env.MAX_SONGS_PER_DAY, 40);
+    return num(process.env.MAX_SONGS_PER_DAY, 0);
+  },
+  /** Report (Sentry) when new songs in 24 hours reach this, and each multiple of it. 0 = off. */
+  get songVolumeAlertPerDay(): number {
+    return num(process.env.SONG_VOLUME_ALERT_PER_DAY, 100);
+  },
+  /** Songs one email address may start per rolling 7 days. 0 = no limit. */
+  get maxSongsPerEmailPerWeek(): number {
+    return num(process.env.MAX_SONGS_PER_EMAIL_PER_WEEK, 3);
+  },
+
+  /* ---------------- Preview links and retention ---------------- */
+  /** How long the direct preview link works, from when the versions are ready. */
+  get previewLinkHours(): number {
+    return Math.max(1, num(process.env.PREVIEW_LINK_HOURS, 48));
+  },
+  /** Days after the versions are ready before unpurchased audio is deleted. Paid songs are kept. */
+  get previewRetentionDays(): number {
+    return Math.max(1, num(process.env.PREVIEW_RETENTION_DAYS, 14));
+  },
+
+  /* ---------------- Email (preview links) ---------------- */
+  /** Transactional email: Postmark (POSTMARK_SERVER_TOKEN) or Resend (RESEND_API_KEY), from EMAIL_FROM. Off until set. */
+  get email() {
+    const postmark = process.env.POSTMARK_SERVER_TOKEN ?? "";
+    const resend = process.env.RESEND_API_KEY ?? "";
+    const from = process.env.EMAIL_FROM ?? "";
+    const provider = postmark ? ("postmark" as const) : resend ? ("resend" as const) : null;
+    return { provider, postmark, resend, from, enabled: !!provider && !!from };
+  },
+
+  /* ---------------- Abuse and spend control ---------------- */
+  /**
+   * Header that carries the visitor's IP, set by our host's proxy (never by the visitor).
+   * Railway's edge sets X-Real-IP, so that is the default on Railway. Elsewhere, empty:
+   * the last X-Forwarded-For entry is used.
+   */
+  get clientIpHeader(): string {
+    const v = process.env.CLIENT_IP_HEADER;
+    if (v !== undefined) return v.trim().toLowerCase();
+    return process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID ? "x-real-ip" : "";
+  },
+  /**
+   * Cloudflare Turnstile bot check on "Write the song". On only when both keys are set.
+   * The site key is public (shown in the page); the secret key verifies tokens server-side.
+   */
+  get turnstile() {
+    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+    const secretKey = process.env.TURNSTILE_SECRET_KEY ?? "";
+    return { siteKey, secretKey, enabled: !!siteKey && !!secretKey };
+  },
+  /** Lyric rewrites (regenerate or hand edit) one song may ask for, ever. Counted in the database. */
+  get maxLyricRewrites(): number {
+    return Math.max(0, num(process.env.MAX_LYRIC_REWRITES, 6));
+  },
+  /** Estimated Claude spend one song may reach before rewrites stop (first lyrics are never blocked). */
+  get maxLlmUsdPerSong(): number {
+    return num(process.env.MAX_LLM_USD_PER_SONG, 5);
+  },
+  /** Site-wide in-quiz follow-up questions per 24 hours; past it, the free rule-based version answers. */
+  get maxProbesPerDay(): number {
+    return num(process.env.MAX_PROBES_PER_DAY, 3000);
   },
 };
 
@@ -287,6 +351,10 @@ export function productionConfigProblems(): string[] {
     // Without the webhook secret, refunds and late payment confirmations are never processed.
     if (missing.length) problems.push(`STRIPE_ENABLED is on but ${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} not set.`);
   }
+  // An email key without a sender (or the reverse) would silently send nothing.
+  if ((set("POSTMARK_SERVER_TOKEN") || set("RESEND_API_KEY")) !== set("EMAIL_FROM")) problems.push("Email needs EMAIL_FROM and one of POSTMARK_SERVER_TOKEN or RESEND_API_KEY (or none of them).");
+  // Half a Turnstile setup means no bot check at all: say so instead of running unprotected.
+  if (set("NEXT_PUBLIC_TURNSTILE_SITE_KEY") !== set("TURNSTILE_SECRET_KEY")) problems.push("Turnstile needs both NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY (or neither).");
   if (env.storageDriver === "s3") {
     const missing = ["S3_BUCKET", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"].filter((k) => !set(k));
     if (missing.length) problems.push(`STORAGE_DRIVER=s3 needs ${missing.join(", ")}.`);

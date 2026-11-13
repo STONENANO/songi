@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { probeAnswer, mockProbe } from "@/lib/songcraft/probe";
 import { env } from "@/lib/env";
-import { rateLimit, clientIp } from "@/lib/session/project";
+import { rateLimit, clientIp } from "@/lib/http/rate-limit";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
 
 export const runtime = "nodejs";
@@ -24,7 +24,9 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(body.data);
   if (!parsed.success) return NextResponse.json({ reaction: "", followUp: "", ingredients: [] });
   // Each call costs a model request: past the per-connection limit, use the free rule-based version.
-  if (!rateLimit(`probe:${clientIp(req)}`, env.isProd ? 40 : 1000, 60 * 60_000)) return NextResponse.json(mockProbe(parsed.data));
+  // Each call costs a model request. Past the per-visitor or site-wide limit, use the free rule-based version.
+  const allowed = (await rateLimit(`probe:${clientIp(req)}`, env.isProd ? 40 : 1000, 60 * 60_000)) && (env.maxProbesPerDay <= 0 || (await rateLimit("probe:site", env.maxProbesPerDay, 24 * 60 * 60_000)));
+  if (!allowed) return NextResponse.json(mockProbe(parsed.data));
   try {
     return NextResponse.json(await probeAnswer(parsed.data));
   } catch (e) {

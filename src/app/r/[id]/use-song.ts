@@ -7,16 +7,20 @@ import { STEPS } from "@/lib/pipeline/states";
 /** Statuses where the server is working and the page keeps checking (from the shared table). */
 const isWorking = (status: RequestView["status"]) => STEPS[status]?.working ?? false;
 
-export type Phase = "loading" | "missing" | "denied" | "writing" | "review" | "recording" | "versions" | "needs_input" | "failed";
+export type Phase = "loading" | "missing" | "denied" | "expired" | "writing" | "review" | "recording" | "versions" | "needs_input" | "failed";
 
 /** True while a story-quiz project is between "lyrics written" and "recording started". */
 function autoRecordPending(v: RequestView): boolean {
   return v.status === "lyrics_ready" && v.autoRecord && v.generationAttempts === 0 && !!v.draft?.singable;
 }
 
-export function phaseOf(view: RequestView | null, problem: "missing" | "denied" | null): Phase {
-  if (problem) return problem;
+export type Problem = "missing" | "denied" | "link_expired";
+
+export function phaseOf(view: RequestView | null, problem: Problem | null): Phase {
+  if (problem) return problem === "link_expired" ? "expired" : problem;
   if (!view) return "loading";
+  // Unpurchased audio was deleted after the retention period.
+  if (view.previewsExpired) return "expired";
   switch (view.status) {
     case "draft":
     case "briefing":
@@ -41,17 +45,20 @@ export function phaseOf(view: RequestView | null, problem: "missing" | "denied" 
 
 export function useSong(id: string) {
   const [view, setView] = useState<RequestView | null>(null);
-  const [problem, setProblem] = useState<"missing" | "denied" | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tracked = useRef(new Set<string>());
 
   const load = useCallback(async () => {
-    // Pass through ?k= so an emailed claim link works on a new device.
+    // Pass through ?k= (claim link) and ?p= (direct preview link) so they work on a new device.
     const res = await fetch(`/api/requests/${id}${typeof window !== "undefined" ? window.location.search : ""}`, { cache: "no-store" }).catch(() => null);
     if (!res) return;
     if (res.status === 404) return setProblem("missing");
-    if (res.status === 403) return setProblem("denied");
+    if (res.status === 403) {
+      const j = (await res.json().catch(() => ({}))) as { code?: string };
+      return setProblem(j.code === "link_expired" ? "link_expired" : "denied");
+    }
     if (res.ok) setView(await res.json());
   }, [id]);
 
@@ -115,6 +122,7 @@ export function useSong(id: string) {
   return {
     view,
     phase,
+    problem,
     /** True from a click until the screen has moved on, so buttons stay disabled in between. */
     busy: busy || !!awaiting,
     error,

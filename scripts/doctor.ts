@@ -165,6 +165,12 @@ async function checkPlatform() {
   else out("ok", "Media", `MEDIA_SIGNING_SECRET set ${mask(process.env.MEDIA_SIGNING_SECRET)}.`);
   // The same check a production server runs at startup (it refuses to start on any of these).
   for (const p of productionConfigProblems()) out("fail", "Production", p);
+  if (env.turnstile.enabled) out("ok", "Bot check", "Cloudflare Turnstile is on for song creation.");
+  else out(env.isProd ? "warn" : "info", "Bot check", "Turnstile is off: set NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY to require a bot check before a song is created.");
+  if (env.email.enabled) out("ok", "Email", `Preview links are emailed through ${env.email.provider} from ${env.email.from}.`);
+  else out("info", "Email", "Email is off: buyers keep their preview link with the copy and share buttons. Set EMAIL_FROM and POSTMARK_SERVER_TOKEN or RESEND_API_KEY to email it.");
+  if (process.env.NEXT_PUBLIC_SENTRY_DSN) out("ok", "Errors", "Sentry error tracking is on.");
+  else out(env.isProd ? "warn" : "info", "Errors", "NEXT_PUBLIC_SENTRY_DSN not set: errors only go to the server log.");
   if (!process.env.ADMIN_TOKEN) out(env.isProd ? "fail" : "warn", "Admin", "ADMIN_TOKEN not set: /admin is open on this machine only (closed in production). Run `npm run doctor -- --fix`.");
   else out("ok", "Admin", "ADMIN_TOKEN set. Open /admin?token=<ADMIN_TOKEN> to see every test song and its feedback.");
   out("ok", "Writer", `Songwriter ${env.writerVersion}, ${env.lyricDrafts} first draft(s) per song.`);

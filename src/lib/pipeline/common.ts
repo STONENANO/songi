@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { RequestStatus, SongRequest } from "../db/schema";
 import type { LlmUsage } from "../llm/client";
+import { reportError } from "../observability";
 
 const { songRequests, events, costLedger } = schema;
 
@@ -36,7 +37,7 @@ export async function claimStatus(requestId: string, from: RequestStatus[], to: 
 
 export async function failRequest(requestId: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`[pipeline] request ${requestId} failed:`, message);
+  reportError(error, { where: "pipeline", requestId });
   await setStatus(requestId, "failed", { lastError: message });
 }
 
