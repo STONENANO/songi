@@ -95,16 +95,40 @@ The customer pages (quiz and song page) are built to be re-skinned without touch
    recording three takes takes about two to four more. You can leave the page and come back.
 4. Play the takes for the person the song is for. Each song page has a "How did it land?" box:
    a reaction, "would you pay $45?", and a note. Fill it in with what they said.
-5. See every test song in one place at http://localhost:4747/admin?token=YOUR_ADMIN_TOKEN:
+5. See every test song in one place at http://localhost:4747/admin (open locally; on the live site, sign in, see Admin sign-in below):
    lyrics, all takes (full audio), checker notes, cost and feedback.
 6. Checkout is in test mode while Stripe is switched off (`STRIPE_ENABLED=false`, the default): "Pay (test)" unlocks the download without charging. On a live server, also set `FREE_DOWNLOADS=true`, or the checkout step stays closed.
 
 Each song costs roughly $0.50 to $0.80 in Claude calls (two first drafts, checks, sometimes a polish pass) plus two
 Kie tasks for three takes. Note your Kie credits before and after the first song.
 
+## Admin sign-in
+
+`/admin` (songs, takes, feedback, Numbers) is behind a Google sign-in through Supabase Auth. Supabase only
+proves who someone is; only the accounts in `ADMIN_EMAILS` get in, and everyone else is told they don't have
+access. The pages aren't linked from the site and tell search engines not to index them. Locally, with no
+Supabase settings, `/admin` is open as before; on a production server without them it is closed to everyone.
+
+One-time setup:
+1. Supabase: create a project (the free plan is enough; only its Auth is used, the app's data stays in its own
+   database). Copy the Project URL and the publishable key from Project Settings -> API Keys.
+2. Google Cloud Console -> APIs & Services -> Credentials -> Create OAuth client ID (Web application).
+   Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`. (First set up the consent
+   screen: External, app name, your email.)
+3. Supabase -> Authentication -> Sign In / Providers -> Google: turn it on and paste the client ID and secret.
+4. Supabase -> Authentication -> URL Configuration: Site URL `https://www.getcryworthy.com`, and add
+   `https://www.getcryworthy.com/admin/auth/callback` (plus `http://localhost:4747/admin/auth/callback` for local
+   testing) to the Redirect URLs.
+5. On the server: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ADMIN_EMAILS` (comma-separated). `APP_URL` must be
+   the site's public address. The server refuses to start with only some of the three set.
+
+The flow runs on the server (PKCE), the session cookies are httpOnly, and `src/middleware.ts` refreshes the
+session on /admin requests. `ADMIN_TOKEN` now only opens the admin API (`/api/admin/ip`).
+To use GitHub instead of Google, enable it in Supabase and set `ADMIN_AUTH_PROVIDER=github`.
+
 ## Unit economics (/admin/numbers)
 
-`/admin/numbers?token=YOUR_ADMIN_TOKEN` shows, for songs started in the last 7, 30 or 90 days or all time:
+`/admin/numbers` shows, for songs started in the last 7, 30 or 90 days or all time:
 the funnel from finished quiz to paid, conversion rates, money (charged, tax, refunds, estimated Stripe fees,
 net revenue), AI cost split into Kie, Claude and the quiz's follow-up questions, and cost and profit per buyer.
 Its break-even line says how many previewed songs one sale pays for. Enter the period's ad spend to see cost to

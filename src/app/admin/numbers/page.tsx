@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { adminAllowed } from "@/lib/admin";
+import { requireAdmin } from "@/lib/auth/admin-session";
+import { AdminNav } from "../nav";
 import { loadNumbers, type Summary } from "@/lib/numbers";
 
 export const dynamic = "force-dynamic";
@@ -77,24 +77,20 @@ function Groups({ title, rows, first }: { title: string; rows: { key: string; su
   );
 }
 
-export default async function NumbersPage({ searchParams }: { searchParams: Promise<{ token?: string; days?: string; ad?: string }> }) {
-  const { token, days: daysParam, ad: adParam } = await searchParams;
-  if (!adminAllowed(token)) notFound();
+export default async function NumbersPage({ searchParams }: { searchParams: Promise<{ days?: string; ad?: string }> }) {
+  const [{ days: daysParam, ad: adParam }, { email }] = await Promise.all([searchParams, requireAdmin()]);
   const days = RANGES.some((r) => r.days === daysParam) ? daysParam! : "30";
   const since = days === "all" ? null : new Date(Date.now() - Number(days) * 24 * 60 * 60_000);
   const data = await loadNumbers(since);
   const t = data.total;
   const f = t.funnel;
   const adSpend = Math.max(0, Number(adParam) || 0);
-  const tokenQ = token ? `token=${encodeURIComponent(token)}&` : "";
-  const href = (d: string) => `/admin/numbers?${tokenQ}days=${d}${adSpend ? `&ad=${adSpend}` : ""}`;
+  const href = (d: string) => `/admin/numbers?days=${d}${adSpend ? `&ad=${adSpend}` : ""}`;
   const be = t.breakEven;
 
   return (
     <div className="admin numbers">
-      <p className="muted">
-        <Link href={`/admin${token ? `?token=${encodeURIComponent(token)}` : ""}`}>Songs</Link> · <strong>Numbers</strong>
-      </p>
+      <AdminNav current="numbers" email={email} />
       <h1>Numbers</h1>
       <p className="muted">
         Songs started in the last {days === "all" ? "(all time)" : `${days} days`}, with their costs and orders.{" "}
@@ -183,7 +179,6 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
 
       <h2>With ad spend</h2>
       <form method="get" action="/admin/numbers" className="row">
-        {token && <input type="hidden" name="token" value={token} />}
         <input type="hidden" name="days" value={days} />
         <label htmlFor="ad" style={{ margin: 0 }}>Ad spend for this period ($)</label>
         <input id="ad" name="ad" type="number" min="0" step="0.01" defaultValue={adSpend || ""} style={{ width: 140 }} />

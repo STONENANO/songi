@@ -65,3 +65,7 @@
 .legacy .numbers .stat-note { font-size: 12px; }
 .legacy .numbers td:not(:first-child), .legacy .numbers th:not(:first-child) { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .legacy .numbers input[type=number] { padding: 10px 12px; border-radius: 10px; border: 1px solid #33333d; background: var(--panel-2); color: var(--text); font: inherit; }
+.legacy .admin-nav { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.legacy .admin-nav form { display: inline; }
+.legacy .linkish { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font: inherit; cursor: pointer; }
+.legacy .admin.login { max-width: 420px; margin: 12vh auto 0; }
