@@ -7,7 +7,8 @@ import { getSongPrice } from "@/lib/commerce/pricing";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Terms of Service", alternates: { canonical: "/terms" } };
 
-/* DRAFT: have a lawyer review before relying on it. Search for "DRAFT" in app/ to find all three policies. */
+/* Decisions (Nov 2026): seller "Cryworthy" until a company is formed (LEGAL_ENTITY_NAME), Georgia law, 14-day refunds.
+   Still worth a lawyer's read before scaling; search for "Decisions" in app/ for all three policies. */
 export default async function Terms() {
   const price = await getSongPrice();
   const brand = BRAND.name;
@@ -16,13 +17,13 @@ export default async function Terms() {
     <LegalPage title="Terms of Service">
       <p>
         These terms are an agreement between you and {entity} (&ldquo;{brand}&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) for your use of this website and the personalised songs we
-        make. By using the site or buying a song, you agree to them.
+        make. By using the site or buying a song, you agree to them. You must be at least 18, or the age of majority where you live, to buy a song.
       </p>
 
       <h2>What we make</h2>
       <p>
-        You tell us about a person and a moment. We use artificial intelligence to write lyrics from your story and to record several versions of a song. You can listen to previews
-        for free and buy the version you like. Songs are made by AI: they are original but may not be perfect, and two songs from similar stories may share ideas or sounds.
+        You tell us about a person and a moment. We use artificial intelligence to write lyrics from your story and to record a few versions of a song. You can listen to short
+        previews for free and buy the version you like; the full song and its lyrics come with the purchase. Songs are made by AI: they are original but may not be perfect, and two songs from similar stories may share ideas or sounds.
       </p>
 
       <h2>Your story</h2>
@@ -47,7 +48,8 @@ export default async function Terms() {
 
       <h2>Delivery and access</h2>
       <p>
-        After payment you get a permanent link to listen and download, on screen and by email. Preview links work for {env.previewLinkHours} hours, and versions nobody bought are
+        After payment you get the full song, its lyrics and a permanent link to listen and download, on screen and by email. If a word or name in your song is wrong, tell us
+        and we&rsquo;ll fix it free. Preview links work for {env.previewLinkHours} hours, and versions nobody bought are
         deleted {env.previewRetentionDays} days after they were ready. Please download your song and keep your email: we keep paid songs, but we can&rsquo;t promise to store
         them forever.
       </p>
@@ -61,6 +63,12 @@ export default async function Terms() {
       <p>
         The site and songs are provided &ldquo;as is&rdquo;. To the extent the law allows, we are not liable for indirect or consequential losses, and our total liability for any
         claim is limited to the amount you paid us for the song in question. Nothing in these terms limits rights you have under consumer law that can&rsquo;t be limited.
+      </p>
+
+      <h2>Governing law</h2>
+      <p>
+        These terms are governed by the laws of the State of Georgia, USA. Any dispute that can&rsquo;t be settled by writing to us will be handled by the courts of Georgia,
+        unless the consumer law where you live gives you the right to bring it there.
       </p>
 
       <h2>Changes</h2>

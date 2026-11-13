@@ -4,7 +4,7 @@ import { LegalPage, SupportLink } from "@/components/legal";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Refund Policy", alternates: { canonical: "/refunds" } };
 
-/* DRAFT: this is a business decision. The window below (14 days, full refund) is a placeholder. */
+/* Decision (Nov 2026): a full refund within 14 days, for any reason. Change REFUND_DAYS here and the home page FAQ together. */
 const REFUND_DAYS = 14;
 
 export default function Refunds() {
@@ -23,7 +23,7 @@ export default function Refunds() {
       <h2>Changed your mind</h2>
       <p>
         If you&rsquo;re not happy with your song for any other reason, write to us within {REFUND_DAYS} days of buying it and we&rsquo;ll refund you in full. Refunds go back to the
-        original payment method and usually appear within 5 to 10 business days.
+        original payment method, including any sales tax you paid, and usually appear within 5 to 10 business days.
       </p>
 
       <h2>How to ask</h2>
