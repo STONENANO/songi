@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 import { LegalPage, SupportLink, legalEntity } from "@/components/legal";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: `Privacy Policy · ${BRAND.name}` };
+export const metadata: Metadata = { title: "Privacy Policy", alternates: { canonical: "/privacy" } };
 
 /* DRAFT: have a lawyer review before relying on it. Keep the provider list in step with the code. */
 export default function Privacy() {

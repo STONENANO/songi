@@ -5,7 +5,7 @@ import { LegalPage, SupportLink, legalEntity } from "@/components/legal";
 import { getSongPrice } from "@/lib/commerce/pricing";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: `Terms of Service · ${BRAND.name}` };
+export const metadata: Metadata = { title: "Terms of Service", alternates: { canonical: "/terms" } };
 
 /* DRAFT: have a lawyer review before relying on it. Search for "DRAFT" in app/ to find all three policies. */
 export default async function Terms() {

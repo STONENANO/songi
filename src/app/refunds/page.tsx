@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { BRAND } from "@/lib/brand";
 import { LegalPage, SupportLink } from "@/components/legal";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: `Refund Policy · ${BRAND.name}` };
+export const metadata: Metadata = { title: "Refund Policy", alternates: { canonical: "/refunds" } };
 
 /* DRAFT: this is a business decision. The window below (14 days, full refund) is a placeholder. */
 const REFUND_DAYS = 14;
