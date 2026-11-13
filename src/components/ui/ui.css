@@ -292,3 +292,9 @@
 .ui-mascot__rec::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); animation: ui-rec 1.4s ease-in-out infinite; }
 .ui-mascot__bubble { position: absolute; z-index: 2; left: var(--space-3); right: var(--space-3); bottom: var(--space-3); margin: 0; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-chunky); font-family: var(--font-display); font-weight: var(--weight-medium); font-size: var(--text-md); letter-spacing: -0.02em; animation: ui-bubble-in 0.5s var(--ease-bounce) both; }
 @keyframes ui-bubble-in { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
+
+/* Looping mascot clips (MascotLoop). The clips have a soft beige backdrop; a round mask fades its
+   edges into the page, so it reads as a warm glow around the mascot, not a box. */
+.ui-loop { display: block; aspect-ratio: 1; height: auto; object-fit: cover; filter: none !important;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 52%, transparent 70%); mask-image: radial-gradient(circle at 50% 50%, #000 52%, transparent 70%); }
+.ui-mini-mascot { width: 104px; height: 104px; margin: 0 auto var(--space-2); object-fit: contain; }

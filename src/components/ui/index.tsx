@@ -561,6 +561,27 @@ export function WaitVideo({ src }: { src: string }) {
   );
 }
 
+/* ------------------------------- mascot loop -------------------------------- */
+
+/**
+ * A short looping mascot clip that stands in for a still image (home page, quiz). Muted and
+ * inline so phones autoplay it. The still (the clip's first frame) shows first, stays if the
+ * video can't play, and is all that shows when the viewer prefers reduced motion. `ui-loop`
+ * fades the clip's backdrop into the page with a round mask.
+ */
+export function MascotLoop({ src, poster, className }: { src: string; poster: string; className?: string }) {
+  const [still, setStill] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setStill(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }, []);
+  if (still || failed) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className={cx(className, "ui-loop")} src={poster} alt="" aria-hidden />;
+  }
+  return <video className={cx(className, "ui-loop")} src={src} poster={poster} autoPlay muted loop playsInline preload="metadata" onError={() => setFailed(true)} aria-hidden />;
+}
+
 /* ------------------------------ mascot stage -------------------------------- */
 
 /** The mascot's looping clips, one per step of making a song. Files live in /public/brand/wait. */

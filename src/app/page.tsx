@@ -12,6 +12,7 @@ import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { Floaters } from "./home-floaters";
 import { SiteFooter } from "@/components/legal";
+import { MascotLoop } from "@/components/ui";
 import { getSongPrice } from "@/lib/commerce/pricing";
 import "./home.css";
 
@@ -109,8 +110,7 @@ export default async function Home() {
           {COPY.hero.titleStart} <span className="home-cry">{COPY.hero.titleAccent}</span> {COPY.hero.titleEnd}
         </h1>
         <p className="home-hero__sub">{COPY.hero.sub}</p>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="home-mascot" src="/brand/mascot/hero.webp" alt="" />
+        <MascotLoop className="home-mascot" src="/brand/loops/hero.mp4" poster="/brand/loops/hero.webp" />
         <div className="home-hero__cta">
           <a className="home-btn" href="/create">
             {COPY.cta}
@@ -210,8 +210,7 @@ export default async function Home() {
         <div className="home-final__row" aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="home-final__img" src="/brand/objects/tissues.webp" alt="" loading="lazy" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="home-final__mascot" src="/brand/mascot/headphones.webp" alt="" loading="lazy" />
+          <MascotLoop className="home-final__mascot" src="/brand/loops/headphones.mp4" poster="/brand/loops/headphones.webp" />
         </div>
         <h2 className="home-h2" id="final-title">
           {COPY.final.title}
