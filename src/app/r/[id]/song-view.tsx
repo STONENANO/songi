@@ -175,9 +175,6 @@ function Recording({ view }: { view: RequestView }) {
   const { name } = names(view);
   const elapsed = useElapsed(view.statusSince);
   const progress = recordProgress(view, elapsed);
-  const sections = useSections(view);
-  const fromStory = storyLineCount(sections);
-
   return (
     <>
       <ScreenTitle eyebrow="Step 2 of 2 · Recording now" title={`${name}'s song is being recorded`} />
@@ -186,18 +183,13 @@ function Recording({ view }: { view: RequestView }) {
         <ProgressBar value={progress.value} label={progress.label} />
         <p className="ui-pointer">👇 Your free preview will appear right here</p>
       </div>
-      {view.draft && (
-        <Card title={`While you wait, here's what we wrote for ${name}`}>
-          <Lyrics sections={sections} reveal legend={fromStory > 0 ? `${fromStory} line${fromStory === 1 ? "" : "s"} came straight from your story. Tap one to see.` : undefined} />
-          <Note>Want to change a line? You can, free, after you hear it.</Note>
-        </Card>
-      )}
+      {view.draft && <LockedLyrics view={view} title={`${name}'s lyrics are a surprise`} />}
       <Card tone="muted" title="What happens next">
         <Checklist
           items={[
             `We're recording ${view.generation.desired > 1 ? `${view.generation.desired} versions in different styles` : "your song"}, and checking each one before you hear it`,
             "Your free previews play right here in a few minutes",
-            "Change any line and we'll re-record it",
+            "The full lyrics come with the song",
             `Pick your favourite and get the full song for ${name}`,
           ]}
         />
@@ -257,7 +249,6 @@ function Versions({ view, song }: { view: RequestView; song: Song }) {
   const sections = useSections(view);
   const chorus = chorusOf(sections);
   const [allLyrics, setAllLyrics] = useState(false);
-  const [editing, setEditing] = useState(false);
   const selected = view.candidates.find((c) => c.selected) ?? null;
   const paid = view.order?.status === "paid";
   const many = view.candidates.length > 1;
@@ -305,7 +296,7 @@ function Versions({ view, song }: { view: RequestView; song: Song }) {
           <Button block disabled={song.busy || song.pendingOrder || (many && !selected)} onClick={() => void song.buy((selected ?? view.candidates[0]).id)}>
             {many && !selected ? "Choose a version first" : `🔓 Get ${name}'s full song · ${view.priceLabel}`}
           </Button>
-          <TrustRow items={["The full song, every verse", "MP3 download", "Change any line"]} />
+          <TrustRow items={["The full song, every verse", "MP3 download", "The full lyrics"]} />
           {song.pendingOrder && <Note>Waiting for payment confirmation. This page updates on its own.</Note>}
           {view.order?.status === "paid_unfulfilled" && <ErrorText>Your payment went through but we couldn&apos;t prepare the file. We&apos;ve been notified and will deliver it.</ErrorText>}
         </div>
@@ -326,7 +317,9 @@ function Versions({ view, song }: { view: RequestView; song: Song }) {
         </div>
       )}
 
-      {chorus && (
+      {!paid && view.draft && <LockedLyrics view={view} title="The full lyrics" />}
+
+      {paid && chorus && (
         <Card title={allLyrics ? "The lyrics" : "The chorus"}>
           <Lyrics sections={allLyrics ? sections : [chorus]} legend="Highlighted lines came from your story. Tap one to see." />
           <Button variant="text" onClick={() => setAllLyrics((a) => !a)}>
@@ -335,26 +328,20 @@ function Versions({ view, song }: { view: RequestView; song: Song }) {
         </Card>
       )}
 
-      {!paid && view.draft && (
-        <Card tone="muted" title="Want to change something?">
-          {!editing ? (
-            <>
-              <Note>Wrong word, wrong name, or a line that isn&apos;t quite right? Edit it and we&apos;ll re-record.</Note>
-              <div className="ui-row ui-mt">
-                <Button variant="secondary" onClick={() => setEditing(true)}>
-                  Change a line
-                </Button>
-                {view.generation.canRequestMore && (
-                  <Button variant="text" disabled={song.busy} onClick={() => void song.moreTakes()}>
-                    Hear another take
-                  </Button>
-                )}
-              </div>
-            </>
-          ) : (
-            <EditLyrics initial={view.draft.displayLyrics} song={song} onDone={() => setEditing(false)} />
-          )}
+      {!paid && view.generation.canRequestMore && (
+        <Card tone="muted" title="Want to hear it another way?">
+          <Note>We'll record another take of {name}&apos;s song, free.</Note>
+          <div className="ui-row ui-mt">
+            <Button variant="text" disabled={song.busy} onClick={() => void song.moreTakes()}>
+              Hear another take
+            </Button>
+          </div>
         </Card>
+      )}
+      {paid && view.supportEmail && (
+        <Note>
+          Spot a wrong word or name? Email <a href={`mailto:${view.supportEmail}`}>{view.supportEmail}</a> and we&apos;ll fix it free.
+        </Note>
       )}
 
       {view.showFeedback && <FeedbackCard song={song} versionId={selected?.id ?? null} given={view.feedback} priceLabel={view.priceLabel} />}
@@ -443,6 +430,40 @@ function FeedbackCard({ song, versionId, given, priceLabel }: { song: Song; vers
   );
 }
 
+/* ------------------------------- locked lyrics ------------------------------- */
+
+/** "2 verses, a chorus and a bridge" from the section names the server sends (never the words). */
+function describeSections(sections: string[]): string {
+  const verses = sections.filter((x) => x === "verse").length;
+  const parts = [
+    verses ? `${verses === 1 ? "a verse" : `${verses} verses`}` : "",
+    sections.some((x) => x.includes("chorus") && !x.includes("pre")) ? "a chorus" : "",
+    sections.some((x) => x.includes("bridge")) ? "a bridge" : "",
+  ].filter(Boolean);
+  if (!parts.length) return "The lyrics";
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** The lyrics before purchase: what they hold, blurred, with the promise that they come with the song. */
+function LockedLyrics({ view, title }: { view: RequestView; title: string }) {
+  const shape = view.draft?.shape;
+  const what = describeSections(shape?.sections ?? []);
+  const fromStory = shape?.storyLineCount ?? 0;
+  return (
+    <Card title={title}>
+      <div className="ui-locked" aria-hidden>
+        {[82, 64, 90, 58, 76, 86].map((w, i) => (
+          <span key={i} className={i % 3 === 1 ? "ui-locked__line ui-locked__line--story" : "ui-locked__line"} style={{ width: `${w}%` }} />
+        ))}
+      </div>
+      <Note>
+        🔒 {what.charAt(0).toUpperCase() + what.slice(1)}
+        {fromStory > 0 ? `, with ${fromStory} line${fromStory === 1 ? "" : "s"} built from your story` : ""}. You&apos;ll hear how they fit in the preview, and get every word with the full song.
+      </Note>
+    </Card>
+  );
+}
+
 /* ----------------------- review (lyrics need a look) ----------------------- */
 
 function Review({ view, song }: { view: RequestView; song: Song }) {
@@ -452,6 +473,28 @@ function Review({ view, song }: { view: RequestView; song: Song }) {
   const draft = view.draft;
   if (!draft) return null;
   const blocked = !draft.singable;
+  if (draft.locked) {
+    // Lyrics stay a surprise until the song is bought: offer a fresh version or recording, never the words.
+    return (
+      <>
+        <ScreenTitle
+          title={blocked ? `We're giving ${name}'s lyrics another pass` : `${name}'s lyrics are ready`}
+          subtitle={blocked ? "Our checks flagged something before recording. We'll write a fresh version, then record it." : "Ready when you are. You'll hear the preview in a few minutes."}
+        />
+        <LockedLyrics view={view} title="The lyrics are a surprise" />
+        <div className="ui-row">
+          {!blocked && (
+            <Button disabled={song.busy} onClick={() => void song.record(draft.id)}>
+              Record it
+            </Button>
+          )}
+          <Button variant={blocked ? "primary" : "text"} disabled={song.busy} onClick={() => void song.newLyrics()}>
+            Write new lyrics
+          </Button>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <ScreenTitle

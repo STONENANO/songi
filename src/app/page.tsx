@@ -43,7 +43,7 @@ const COPY = {
   words: {
     note: "the little details",
     title: "Your words end up in the song",
-    body: "A song that could be about anyone won't make anyone cry. Every song starts from the details you share, so the line about Sunday pancakes is about her Sunday pancakes. You read every lyric before you buy, and you can change any line that isn't right.",
+    body: "A song that could be about anyone won't make anyone cry. Every song starts from the details you share, so the line about Sunday pancakes is about her Sunday pancakes. You hear it before you buy, and the full lyrics come with the song.",
     from: "“She makes pancakes every Sunday and sings off-key in the car.”",
     becomes: "↓ becomes",
     lyricLine: "Flour on your sleeves every Sunday morning,",
@@ -61,11 +61,11 @@ const COPY = {
     items: [
       {
         q: "Is it really about them, or a template?",
-        a: "It's built from your answers. The names, places, sayings and inside jokes you share go into the lyrics, and every song is checked against your story before it's recorded. You read every line before you pay, and you can change any line that's off.",
+        a: "It's built from your answers. The names, places, sayings and inside jokes you share go into the lyrics, and every song is checked against your story before it's recorded. You hear your preview before you pay, so you know it's about them.",
       },
       {
         q: "What if I don't love it?",
-        a: "You hear the versions free first, so you only pay for one you like. Not quite right? Change a line or ask for another take. If something's still wrong after you buy, we'll fix it or refund you in full within 14 days.",
+        a: "You hear the versions free first, so you only pay for one you like. Not quite right? Ask for another take. If a word or a name is wrong after you buy, we'll fix it free, or refund you in full within 14 days.",
       },
       {
         q: "How long does it take?",

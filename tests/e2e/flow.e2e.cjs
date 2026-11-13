@@ -139,9 +139,9 @@ const SHOTS = process.env.E2E_SCREENSHOTS || "";
   // Lines fade with distance from the focused line.
   const op = await page.locator("button.pl-line").evaluateAll((els) => els.slice(0, 4).map((e) => Number(getComputedStyle(e).opacity)));
   assert.ok(op[0] > op[1] && op[1] > op[2] && op[2] > op[3], `lines fade with distance: ${op}`);
-  // No cover art: the lyrics are the picture, and no image is offered for link previews.
+  // No cover art: the lyrics are the picture. A shared link shows the song's own card ("A song for Linda").
   assert.equal(await page.locator(".pl-cover, .pl img").count(), 0, "no cover art");
-  assert.equal(await page.locator('meta[property="og:image"]').count(), 0);
+  assert.match(await page.locator('meta[property="og:image"]').first().getAttribute("content"), /\/d\/.+\/opengraph-image/, "the song's share card");
   await shot("e2e-3b-player");
   // Play: the lyric highlight follows the song.
   await page.click('button[aria-label="Play"]');

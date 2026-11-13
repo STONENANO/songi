@@ -264,6 +264,23 @@ test("purchase email: the permanent song link, once per order, with the support 
   });
 });
 
+test("lyrics stay locked until payment: no words in the page data before, all of them after", async () => {
+  const s = await readySong();
+  const before = (await (await get(s.id, "", s.ownerCookie)).json()) as { draft: { displayLyrics: string; storyLines: unknown[]; locked: boolean; shape: { sections: string[]; storyLineCount: number } } };
+  assert.equal(before.draft.locked, true);
+  assert.equal(before.draft.displayLyrics, "", "no lyric text before purchase");
+  assert.deepEqual(before.draft.storyLines, [], "no lyric lines via the story highlights either");
+  assert.ok(before.draft.shape.sections.length > 0, "the song's shape is still described");
+  const db = await getDb();
+  const [v] = await db.select().from(schema.songVersions).where(eq(schema.songVersions.requestId, s.id)).limit(1);
+  const c = await startCheckout(s.id, v.id);
+  assert.ok(c.ok);
+  await payWithTestCheckout((c as { orderId: string }).orderId);
+  const after = (await (await get(s.id, "", s.ownerCookie)).json()) as { draft: { displayLyrics: string; locked: boolean } };
+  assert.equal(after.draft.locked, false);
+  assert.ok(after.draft.displayLyrics.length > 20, "the full lyrics after purchase");
+});
+
 test("purchase email: names are escaped in the HTML", () => {
   const m = purchaseEmail({ to: "a@b.c", name: `<b>x</b>`, url: "https://x.app/d/t", brand: "Cryworthy", support: "" });
   assert.ok(!m.html.includes("<b>x</b>"));

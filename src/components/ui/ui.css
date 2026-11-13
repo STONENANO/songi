@@ -298,3 +298,8 @@
 .ui-loop { display: block; aspect-ratio: 1; height: auto; object-fit: cover; filter: none !important;
   -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 52%, transparent 70%); mask-image: radial-gradient(circle at 50% 50%, #000 52%, transparent 70%); }
 .ui-mini-mascot { width: 104px; height: 104px; margin: 0 auto var(--space-2); object-fit: contain; }
+
+/* Lyrics before purchase: blurred placeholder lines (no words are sent to the page). */
+.ui-locked { display: grid; gap: 8px; margin-bottom: var(--space-3); filter: blur(3px); opacity: 0.8; }
+.ui-locked__line { display: block; height: 10px; border-radius: 6px; background: var(--color-border); }
+.ui-locked__line--story { background: var(--color-highlight); }

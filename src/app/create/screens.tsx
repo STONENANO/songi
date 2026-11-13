@@ -721,7 +721,7 @@ export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
         <Button block disabled={!emailOk || q.busy || (!!q.turnstileSiteKey && !q.turnstileToken)} onClick={q.submit}>
           {q.busy ? "Starting…" : q.turnstileSiteKey && !q.turnstileToken ? "One moment…" : `Write ${q.name}'s song`}
         </Button>
-        <TrustRow items={["Free preview", "No card needed", "Change any line later"]} />
+        <TrustRow items={["Free preview", "No card needed", "Hear it before you pay"]} />
       </>
     ),
   };
