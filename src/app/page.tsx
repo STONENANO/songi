@@ -12,6 +12,7 @@ import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { Floaters } from "./home-floaters";
 import { SiteFooter } from "@/components/legal";
+import { MascotLoop } from "@/components/ui";
 import { getSongPrice } from "@/lib/commerce/pricing";
 import "./home.css";
 
@@ -42,7 +43,7 @@ const COPY = {
   words: {
     note: "the little details",
     title: "Your words end up in the song",
-    body: "A song that could be about anyone won't make anyone cry. Every song starts from the details you share, so the line about Sunday pancakes is about her Sunday pancakes. You read every lyric before you buy, and you can change any line that isn't right.",
+    body: "A song that could be about anyone won't make anyone cry. Every song starts from the details you share, so the line about Sunday pancakes is about her Sunday pancakes. You hear it before you buy, and the full lyrics come with the song.",
     from: "“She makes pancakes every Sunday and sings off-key in the car.”",
     becomes: "↓ becomes",
     lyricLine: "Flour on your sleeves every Sunday morning,",
@@ -60,11 +61,11 @@ const COPY = {
     items: [
       {
         q: "Is it really about them, or a template?",
-        a: "It's built from your answers. The names, places, sayings and inside jokes you share go into the lyrics, and every song is checked against your story before it's recorded. You read every line before you pay, and you can change any line that's off.",
+        a: "It's built from your answers. The names, places, sayings and inside jokes you share go into the lyrics, and every song is checked against your story before it's recorded. You hear your preview before you pay, so you know it's about them.",
       },
       {
         q: "What if I don't love it?",
-        a: "You hear the versions free first, so you only pay for one you like. Not quite right? Change a line or ask for another take. If something's still wrong after you buy, we'll fix it or refund you in full within 14 days.",
+        a: "You hear the versions free first, so you only pay for one you like. Not quite right? Ask for another take. If a word or a name is wrong after you buy, we'll fix it free, or refund you in full within 14 days.",
       },
       {
         q: "How long does it take?",
@@ -109,8 +110,7 @@ export default async function Home() {
           {COPY.hero.titleStart} <span className="home-cry">{COPY.hero.titleAccent}</span> {COPY.hero.titleEnd}
         </h1>
         <p className="home-hero__sub">{COPY.hero.sub}</p>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="home-mascot" src="/brand/mascot/hero.webp" alt="" />
+        <MascotLoop className="home-mascot" src="/brand/loops/hero.mp4" poster="/brand/loops/hero.webp" />
         <div className="home-hero__cta">
           <a className="home-btn" href="/create">
             {COPY.cta}
@@ -210,8 +210,7 @@ export default async function Home() {
         <div className="home-final__row" aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="home-final__img" src="/brand/objects/tissues.webp" alt="" loading="lazy" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="home-final__mascot" src="/brand/mascot/headphones.webp" alt="" loading="lazy" />
+          <MascotLoop className="home-final__mascot" src="/brand/loops/headphones.mp4" poster="/brand/loops/headphones.webp" />
         </div>
         <h2 className="home-h2" id="final-title">
           {COPY.final.title}

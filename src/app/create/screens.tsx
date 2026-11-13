@@ -27,8 +27,7 @@ import {
   Tile,
   Tiles,
   Tip,
-  TrustRow,
-} from "@/components/ui";
+  TrustRow, MascotLoop } from "@/components/ui";
 import { DETAIL_EXAMPLES, FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, TRUST, feelingsFor, threadByKey, threadsFor } from "@/lib/onboarding/content";
 import { CUSTOM_GENRE, MAX_THREADS, MIN_THREADS, RECOMMENDED_THREADS, track, type Quiz } from "./use-quiz";
 import { OTHER_ANSWER, formatFor, isAnswered, type BlanksFormat, type TapFormat } from "@/lib/onboarding/story-formats";
@@ -673,6 +672,7 @@ export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
     body: (
       <>
         <ScreenTitle eyebrow="Almost there" title={`${q.name}'s song is ready to write`} />
+        <MascotLoop className="ui-mini-mascot" src="/brand/loops/hero.mp4" poster="/brand/loops/hero.webp" />
         <Card tone="muted">
           <p>
             <b>{q.name}</b>
@@ -721,7 +721,7 @@ export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
         <Button block disabled={!emailOk || q.busy || (!!q.turnstileSiteKey && !q.turnstileToken)} onClick={q.submit}>
           {q.busy ? "Starting…" : q.turnstileSiteKey && !q.turnstileToken ? "One moment…" : `Write ${q.name}'s song`}
         </Button>
-        <TrustRow items={["Free preview", "No card needed", "Change any line later"]} />
+        <TrustRow items={["Free preview", "No card needed", "Hear it before you pay"]} />
       </>
     ),
   };

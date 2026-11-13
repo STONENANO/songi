@@ -75,6 +75,14 @@ export async function getRequestView(requestId: string, access: Access = "owner"
   const validation = (current?.validation ?? null) as { issues?: IssueView[]; notes?: string[] } | null;
   const issues = (validation?.issues ?? []).filter((i) => i.severity !== "suggestion");
 
+  /**
+   * The lyrics are part of what the buyer pays for: until the song is bought, the page gets the
+   * song's shape (sections, how many lines came from their story), never the words. Hiding them
+   * only on screen would still send them to the browser.
+   */
+  const lyricsLocked = !paid;
+  const sectionNames = (current?.displayLyrics ?? "").match(/^\s*\[([^\]]+)\]/gm)?.map((t) => t.replace(/[\s\[\]]/g, " ").trim().replace(/\s+\d+$/, "").toLowerCase()) ?? [];
+
   const quiz = (r.quizSnapshot ?? {}) as Record<string, unknown>;
   // Which lyric lines carry which story detail, for highlighting on the song page.
   const factById = new Map((brief?.facts ?? []).map((f) => [f.id, f]));
@@ -120,16 +128,20 @@ export async function getRequestView(requestId: string, access: Access = "owner"
           id: current.id,
           version: current.version,
           title: current.title,
-          displayLyrics: current.displayLyrics,
+          displayLyrics: lyricsLocked ? "" : current.displayLyrics,
           status: current.status ?? (draftIsSingable(current) ? "verified" : "failed"),
           singable: draftIsSingable(current),
-          blockingIssues: issues.filter((i) => i.severity === "critical"),
-          warnings: issues.filter((i) => i.severity === "warning").slice(0, 6),
-          notes: validation?.notes ?? [],
+          // Issue notes can quote lyric lines, so they stay back too.
+          blockingIssues: lyricsLocked ? [] : issues.filter((i) => i.severity === "critical"),
+          warnings: lyricsLocked ? [] : issues.filter((i) => i.severity === "warning").slice(0, 6),
+          notes: lyricsLocked ? [] : (validation?.notes ?? []),
           creativeScore: (current.creative as { weighted?: number } | null)?.weighted ?? null,
           arrangementId: current.arrangementId,
           source: current.source,
-          storyLines,
+          storyLines: lyricsLocked ? [] : storyLines,
+          locked: lyricsLocked,
+          /** What the locked lyrics hold, for the "unlocks with the song" card. */
+          shape: { sections: sectionNames, storyLineCount: new Set(storyLines.map((l) => l.line)).size },
         }
       : null,
     draftCount: drafts.length,
@@ -153,6 +165,8 @@ export async function getRequestView(requestId: string, access: Access = "owner"
     feedback: lastFeedback ? { rating: lastFeedback.rating, wouldPay: lastFeedback.wouldPay, note: lastFeedback.note } : null,
     /** Show the tester feedback box (test mode, or TESTER_FEEDBACK=true). Never shown to paying customers by default. */
     showFeedback: env.testerFeedback,
+    /** Where buyers write about a wrong word or name (fixed free after purchase). */
+    supportEmail: env.supportEmail,
     priceLabel: env.freeDownloads ? "free while testing" : (await getSongPrice()).label,
     /**
      * The direct link to these versions (works on any device until expiresAt), for the copy and
