@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { env, productionConfigProblems } from "../src/lib/env";
-import { stripe } from "../src/lib/commerce/stripe";
+import { stripe, priceProblem } from "../src/lib/commerce/stripe";
 import { checkBucket } from "../src/lib/storage";
 import { MODEL_CAPS } from "../src/lib/songcraft/style";
 
@@ -101,8 +101,28 @@ async function checkStripe() {
       out("fail", "Stripe", `Secret key rejected: ${(e as Error).message}`);
     }
   }
+  if (s.secretKey) await checkStripePrice();
   if (s.secretKey) await checkStripeTax();
   out("info", "Stripe", `Webhook endpoint to add in Stripe: ${env.appUrl}/api/webhooks/stripe (events: ${STRIPE_EVENTS.join(", ")}).`);
+}
+
+/** STRIPE_PRICE_ID: exists in this key's mode, is one-time, and equals SONG_PRICE_CENTS. */
+async function checkStripePrice() {
+  const id = env.stripe.priceId;
+  if (!id) return out("info", "Stripe price", "STRIPE_PRICE_ID not set: checkout builds the price from SONG_PRICE_CENTS (sales aren't tied to a product in Stripe).");
+  try {
+    const price = await stripe().prices.retrieve(id, { expand: ["product"] });
+    const problem = priceProblem(price);
+    if (problem) return out("fail", "Stripe price", `${problem} Checkout refuses to open until this is fixed.`);
+    const product = typeof price.product === "string" ? null : (price.product as { name?: string; tax_code?: string | { id: string } | null });
+    const taxCode = typeof product?.tax_code === "string" ? product.tax_code : product?.tax_code?.id;
+    out("ok", "Stripe price", `${id} (${product?.name ?? "product"}) at ${env.priceLabel} matches SONG_PRICE_CENTS.`);
+    if (env.stripe.automaticTax && price.tax_behavior === "unspecified")
+      out("warn", "Stripe price", "The price has no tax behavior: Stripe Tax uses the account default (Dashboard -> Tax -> Settings). Set it to exclusive or inclusive on the price.");
+    if (taxCode && taxCode !== env.stripe.taxCode) out("info", "Stripe price", `The product's tax code is ${taxCode} (used for tax with STRIPE_PRICE_ID); STRIPE_TAX_CODE (${env.stripe.taxCode}) only applies without it.`);
+  } catch (e) {
+    out("fail", "Stripe price", `STRIPE_PRICE_ID ${id} not found with this key (${(e as Error).message}). Sandbox and live mode have different price ids.`);
+  }
 }
 
 const STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed", "payment_intent.payment_failed", "charge.refunded"];

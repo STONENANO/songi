@@ -110,12 +110,20 @@ export async function prepareCheckout(order: Order): Promise<PreparedCheckout> {
   const [r] = await db.select({ email: songRequests.email, name: songRequests.recipientName }).from(songRequests).where(eq(songRequests.id, order.requestId)).limit(1);
   const [v] = await db.select({ title: songVersions.title }).from(songVersions).where(eq(songVersions.id, order.versionId)).limit(1);
   const forName = r?.name ? ` for ${r.name}` : "";
-  const cs = await createCheckoutSession(order, {
-    email: r?.email,
-    productName: v?.title ? `${v.title} (custom song)` : `Custom song${forName}`,
-    description: `Custom song${forName}: full song, MP3 download and a permanent link`,
-    replaces: order.stripeCheckoutSessionId,
-  });
+  let cs;
+  try {
+    cs = await createCheckoutSession(order, {
+      email: r?.email,
+      productName: v?.title ? `${v.title} (custom song)` : `Custom song${forName}`,
+      description: `Custom song${forName}: full song, MP3 download and a permanent link`,
+      replaces: order.stripeCheckoutSessionId,
+    });
+  } catch (e) {
+    // A misconfigured price (or Stripe being down) must not take the page down: say so, and alert us.
+    reportIssue("Checkout could not be opened", { kind: "checkout_unavailable", orderId: order.id, requestId: order.requestId, error: (e as Error).message }, "error");
+    await logEvent(order.requestId, "checkout:unavailable", { orderId: order.id, error: (e as Error).message });
+    return { kind: "closed", reason: "checkout_unavailable" };
+  }
   await db.update(orders).set({ stripeCheckoutSessionId: cs.id }).where(eq(orders.id, order.id));
   return stripeMode(cs.clientSecret, !!r?.email);
 }

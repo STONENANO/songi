@@ -4,6 +4,8 @@
  * automatic_tax, and webhook signature checks.
  *
  * The price is always the server's (env.songPriceCents); the browser never sends one.
+ * With STRIPE_PRICE_ID, the session sells that Stripe Price (so sales land on your product)
+ * after checking it equals env.songPriceCents.
  * Our order id travels in the session's (and its PaymentIntent's) metadata and is
  * checked on the way back.
  */
@@ -28,6 +30,35 @@ export function stripe(): Stripe {
 /** Tags our sessions in the Dashboard so this checkout flow can be told apart from others. */
 export const INTEGRATION_IDENTIFIER = "cryworthy-song-elements-qhzmtwrk";
 
+/** The configured Stripe Price, fetched once per process (and again after a failed check). */
+let priceCache: { id: string; at: number; price: Stripe.Price } | null = null;
+const PRICE_TTL_MS = 5 * 60_000;
+
+export async function configuredPrice(): Promise<Stripe.Price> {
+  const id = env.stripe.priceId;
+  if (priceCache && priceCache.id === id && Date.now() - priceCache.at < PRICE_TTL_MS) return priceCache.price;
+  const price = await stripe().prices.retrieve(id);
+  priceCache = { id, at: Date.now(), price };
+  return price;
+}
+
+/**
+ * Why a Stripe Price can't be sold as our song, or null when it can. The amount must equal
+ * SONG_PRICE_CENTS: the site shows that price and the payment check expects it.
+ */
+export function priceProblem(price: Pick<Stripe.Price, "id" | "active" | "type" | "unit_amount" | "currency">): string | null {
+  if (!price.active) return `${price.id} is archived in Stripe.`;
+  if (price.type !== "one_time") return `${price.id} is a recurring price; the song needs a one-time price.`;
+  if (price.currency !== env.currency || price.unit_amount !== env.songPriceCents)
+    return `${price.id} is ${price.unit_amount} ${price.currency.toUpperCase()} but SONG_PRICE_CENTS / SONG_CURRENCY say ${env.songPriceCents} ${env.currency.toUpperCase()}. Make them match.`;
+  return null;
+}
+
+/** For tests: forget the fetched price. */
+export function resetPriceCacheForTests() {
+  priceCache = null;
+}
+
 export type SessionRef = { id: string; clientSecret: string; status: Stripe.Checkout.Session.Status | null };
 
 /**
@@ -40,21 +71,30 @@ export async function createCheckoutSession(
   opts: { email?: string | null; productName: string; description: string; replaces?: string | null },
 ): Promise<SessionRef> {
   const metadata = { order_id: order.id, request_id: order.requestId, version_id: order.versionId };
+  let lineItem: Stripe.Checkout.SessionCreateParams.LineItem = {
+    quantity: 1,
+    price_data: {
+      currency: env.currency,
+      unit_amount: env.songPriceCents,
+      tax_behavior: env.stripe.taxBehavior,
+      product_data: { name: opts.productName, description: opts.description, tax_code: env.stripe.taxCode },
+    },
+  };
+  if (env.stripe.priceId) {
+    // Sell the product's price from Stripe, but only if it is exactly what the site shows.
+    let problem = priceProblem(await configuredPrice());
+    if (problem) {
+      priceCache = null; // fixed in the Dashboard a minute ago? Look again before refusing.
+      problem = priceProblem(await configuredPrice());
+    }
+    if (problem) throw new Error(`STRIPE_PRICE_ID can't be used: ${problem}`);
+    lineItem = { quantity: 1, price: env.stripe.priceId };
+  }
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     ui_mode: "elements",
     integration_identifier: INTEGRATION_IDENTIFIER,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: env.currency,
-          unit_amount: env.songPriceCents,
-          tax_behavior: env.stripe.taxBehavior,
-          product_data: { name: opts.productName, description: opts.description, tax_code: env.stripe.taxCode },
-        },
-      },
-    ],
+    line_items: [lineItem],
     // Our post-purchase page confirms the session with Stripe; wallets and 3-D Secure come back here.
     return_url: `${env.appUrl}/checkout/${order.id}/complete?session_id={CHECKOUT_SESSION_ID}`,
     customer_email: opts.email || undefined,

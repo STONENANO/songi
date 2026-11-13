@@ -38,6 +38,7 @@ Requirements: Node 22 and ffmpeg (`brew install ffmpeg`). The Dockerfile include
 | `STRIPE_WEBHOOK_SECRET` | Developers → Webhooks → add `https://<domain>/api/webhooks/stripe` → signing secret (`whsec_…`). Locally: `stripe listen --forward-to localhost:4747/api/webhooks/stripe` (Stripe CLI: `npm i -g @stripe/cli`) |
 | `STRIPE_ENABLED` | The Stripe switch. `false` (default): test checkout, nothing charged, even with keys set. `true`: real payments |
 | `SONG_PRICE_CENTS` / `SONG_CURRENCY` | The price (default 3900 = $39, usd). Set on the server only |
+| `STRIPE_PRICE_ID` | Optional. The Stripe Price to sell (`price_…`), so sales land on your product in Stripe. Must be one-time and equal `SONG_PRICE_CENTS`, or checkout refuses to open (and alerts Sentry). Sandbox and live have different ids; `npm run doctor` checks it |
 | `STRIPE_AUTOMATIC_TAX` / `STRIPE_TAX_CODE` / `STRIPE_TAX_BEHAVIOR` | Stripe Tax. See "Stripe Tax" below before turning it on |
 
 Add keys one at a time. With only `ANTHROPIC_API_KEY` set you get real lyrics and still spend nothing on music.

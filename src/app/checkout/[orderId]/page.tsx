@@ -42,7 +42,11 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
       </Card>
       {prep.kind === "closed" ? (
         <Card tone="muted">
-          <Note>This checkout is no longer open ({prep.reason.replace(/_/g, " ")}). Go back to the song to start again.</Note>
+          <Note>
+            {prep.reason === "checkout_unavailable"
+              ? "Checkout is having a problem right now. We've been alerted. Please try again in a few minutes; your song is saved."
+              : `This checkout is no longer open (${prep.reason.replace(/_/g, " ")}). Go back to the song to start again.`}
+          </Note>
           <div className="ui-mt">
             <Button href={`/r/${c.request.id}`}>Back to the song</Button>
           </div>

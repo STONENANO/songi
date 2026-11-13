@@ -256,6 +256,13 @@ export const env = {
       taxCode: process.env.STRIPE_TAX_CODE || "txcd_10401100",
       /** exclusive = tax is added on top of the price (usual in the US); inclusive = the price already contains tax. */
       taxBehavior: (process.env.STRIPE_TAX_BEHAVIOR === "inclusive" ? "inclusive" : "exclusive") as "inclusive" | "exclusive",
+      /**
+       * The Stripe Price (price_...) the checkout sells, so sales are recorded against your
+       * product in Stripe. Its amount and currency must equal SONG_PRICE_CENTS / SONG_CURRENCY:
+       * checkout refuses to open otherwise. Sandbox and live mode have different price ids.
+       * Empty = an inline price built from SONG_PRICE_CENTS (no product in Stripe).
+       */
+      priceId: (process.env.STRIPE_PRICE_ID ?? "").trim(),
     };
   },
   /** The song's price in the smallest currency unit. Set on the server only; the browser never sends a price. */
