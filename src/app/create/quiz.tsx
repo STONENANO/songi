@@ -16,8 +16,8 @@ import {
   type ScreenParts,
 } from "./screens";
 
-export default function StoryQuiz({ genres }: { genres: Genre[] }) {
-  const q = useQuiz();
+export default function StoryQuiz({ genres, turnstileSiteKey = "" }: { genres: Genre[]; turnstileSiteKey?: string }) {
+  const q = useQuiz(turnstileSiteKey);
   if (!q.loaded) return null; // avoid flashing step 1 before a saved quiz is restored
   // Keyed by step so every step mounts fresh: screens can hold their own state and hooks.
   return <Step key={q.step} q={q} genres={genres} />;
