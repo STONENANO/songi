@@ -256,9 +256,20 @@ export const env = {
       taxCode: process.env.STRIPE_TAX_CODE || "txcd_10401100",
       /** exclusive = tax is added on top of the price (usual in the US); inclusive = the price already contains tax. */
       taxBehavior: (process.env.STRIPE_TAX_BEHAVIOR === "inclusive" ? "inclusive" : "exclusive") as "inclusive" | "exclusive",
+      /**
+       * Where the song's price comes from (see lib/commerce/pricing.ts). STRIPE_PRODUCT_ID: that
+       * product's default price, so the price is changed in the Stripe Dashboard. STRIPE_PRICE_ID:
+       * one pinned price. Neither: SONG_PRICE_CENTS. Sandbox and live mode have different ids.
+       */
+      productId: (process.env.STRIPE_PRODUCT_ID ?? "").trim(),
+      priceId: (process.env.STRIPE_PRICE_ID ?? "").trim(),
     };
   },
-  /** The song's price in the smallest currency unit. Set on the server only; the browser never sends a price. */
+  /**
+   * The song's price in the smallest currency unit, when it doesn't come from Stripe
+   * (STRIPE_PRODUCT_ID / STRIPE_PRICE_ID), and the fallback shown until Stripe answers.
+   * Read prices through getSongPrice() in lib/commerce/pricing.ts, not from here.
+   */
   get songPriceCents(): number {
     return num(process.env.SONG_PRICE_CENTS, 3900);
   },

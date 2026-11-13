@@ -14,6 +14,7 @@ import { spawnSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
 import { env, productionConfigProblems } from "../src/lib/env";
 import { stripe } from "../src/lib/commerce/stripe";
+import { getCheckoutPrice, getSongPrice, setPriceFetcherForTests } from "../src/lib/commerce/pricing";
 import { checkBucket } from "../src/lib/storage";
 import { MODEL_CAPS } from "../src/lib/songcraft/style";
 
@@ -101,11 +102,40 @@ async function checkStripe() {
       out("fail", "Stripe", `Secret key rejected: ${(e as Error).message}`);
     }
   }
+  if (s.secretKey) await checkStripePrice();
   if (s.secretKey) await checkStripeTax();
   out("info", "Stripe", `Webhook endpoint to add in Stripe: ${env.appUrl}/api/webhooks/stripe (events: ${STRIPE_EVENTS.join(", ")}).`);
 }
 
-const STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed", "payment_intent.payment_failed", "charge.refunded"];
+/** Where the price comes from, and whether that Stripe product/price can be sold. */
+async function checkStripePrice() {
+  const { productId, priceId } = env.stripe;
+  const fallback = `SONG_PRICE_CENTS (${env.priceLabel})`;
+  if (!productId && !priceId) return out("info", "Stripe price", `The price comes from ${fallback}. Set STRIPE_PRODUCT_ID to change it from the Stripe Dashboard instead.`);
+  if (productId && priceId) out("warn", "Stripe price", "Both STRIPE_PRODUCT_ID and STRIPE_PRICE_ID are set; the product's default price wins. Remove STRIPE_PRICE_ID.");
+  setPriceFetcherForTests(null);
+  try {
+    const p = await getCheckoutPrice();
+    out("ok", "Stripe price", `${p.label} from ${productId ? `product ${productId} (${p.productName ?? "?"}), default price` : "price"} ${p.priceId}. Change it in Stripe and the site follows within a minute.`);
+    if (p.cents !== env.songPriceCents || p.currency !== env.currency)
+      out("info", "Stripe price", `Only shown if Stripe can't be reached at startup: ${fallback}. Set SONG_PRICE_CENTS=${p.cents} to match.`);
+  } catch (e) {
+    out("fail", "Stripe price", `Can't sell the configured price: ${(e as Error).message} Checkout won't open until it's fixed (sandbox and live mode have different ids).`);
+  }
+}
+
+const STRIPE_EVENTS = [
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
+  "payment_intent.payment_failed",
+  "charge.refunded",
+  // Price changes in the Dashboard reach the site at once (otherwise within a minute).
+  "product.updated",
+  "price.created",
+  "price.updated",
+  "price.deleted",
+];
 
 /**
  * Stripe Tax collects nothing (and raises no error) without a head office address and an
@@ -130,14 +160,15 @@ async function checkStripeTax() {
     const state = (first.country_options as { us?: { state?: string } }).us?.state;
     const sample = first.country === "US" ? SAMPLE_US[state ?? ""] : { country: first.country };
     if (!sample) return out("info", label, `No sample address for ${where.split(", ")[0]}; run a test checkout from that place to confirm tax.`);
+    const song = await getSongPrice();
     const calc = await stripe().tax.calculations.create({
-      currency: env.currency,
-      line_items: [{ amount: env.songPriceCents, reference: "song", tax_code: s.taxCode, tax_behavior: s.taxBehavior }],
+      currency: song.currency,
+      line_items: [{ amount: song.cents, reference: "song", tax_code: s.taxCode, tax_behavior: song.taxBehavior }],
       customer_details: { address: sample, address_source: "billing" },
     });
     const reasons = [...new Set(calc.tax_breakdown.map((b) => b.taxability_reason))].join(", ");
     if (reasons.includes("not_collecting")) out("fail", label, `Test calculation in ${where.split(", ")[0]} returned not_collecting: check the registration and tax code.`);
-    else out("ok", label, `Test calculation in ${where.split(", ")[0]}: tax ${calc.tax_amount_exclusive + calc.tax_amount_inclusive} on ${env.songPriceCents} (${reasons}). Confirm with your tax advisor that this is expected.`);
+    else out("ok", label, `Test calculation in ${where.split(", ")[0]}: tax ${calc.tax_amount_exclusive + calc.tax_amount_inclusive} on ${song.cents} (${reasons}). Confirm with your tax advisor that this is expected.`);
   } catch (e) {
     out("warn", label, `Could not read tax settings: ${(e as Error).message}`);
   }

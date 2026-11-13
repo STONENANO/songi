@@ -14,6 +14,9 @@ export async function startupChecks() {
     process.exit(1);
   }
   scheduleRetention();
+  // Load the song price from Stripe now, so the first visitor doesn't wait for it.
+  const { warmSongPrice } = await import("./lib/commerce/pricing");
+  void warmSongPrice();
   if (env.storageDriver !== "s3") return;
   const missing = (["S3_BUCKET", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const).filter((k) => !process.env[k]);
   if (missing.length) {

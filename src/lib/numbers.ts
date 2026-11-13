@@ -10,6 +10,7 @@
 import { and, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { env } from "./env";
+import { getSongPrice } from "./commerce/pricing";
 
 export type NumbersSong = { id: string; createdAt: Date; occasion: string; previewsReady: boolean; pickedTake: boolean };
 export type NumbersOrder = {
@@ -187,7 +188,8 @@ export async function loadNumbers(since: Date | null): Promise<NumbersPage> {
     costs: [...songCosts, ...quizCosts].map((c) => ({ requestId: c.requestId, provider: c.provider, costUsd: Number(c.costUsd ?? 0) })),
   };
   const fee = env.stripeFee;
-  const priceCents = env.songPriceCents;
+  // The current list price, for the break-even line (orders keep what they were actually sold at).
+  const priceCents = (await getSongPrice()).cents;
   return {
     since,
     total: summarize(input, fee, priceCents),

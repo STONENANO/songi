@@ -3,12 +3,15 @@
  * Element inside our page, so card, Link, Apple Pay and Google Pay), Stripe Tax through
  * automatic_tax, and webhook signature checks.
  *
- * The price is always the server's (env.songPriceCents); the browser never sends one.
+ * The price is always the server's (see pricing.ts); the browser never sends one. When the
+ * price comes from a Stripe product or price, the session sells that Price, so sales are
+ * recorded against your product in Stripe.
  * Our order id travels in the session's (and its PaymentIntent's) metadata and is
  * checked on the way back.
  */
 import Stripe from "stripe";
 import { env } from "../env";
+import type { SongPrice } from "./pricing";
 
 let client: Stripe | null = null;
 
@@ -37,24 +40,25 @@ export type SessionRef = { id: string; clientSecret: string; status: Stripe.Chec
  */
 export async function createCheckoutSession(
   order: { id: string; requestId: string; versionId: string },
-  opts: { email?: string | null; productName: string; description: string; replaces?: string | null },
+  opts: { email?: string | null; productName: string; description: string; replaces?: string | null; price: SongPrice },
 ): Promise<SessionRef> {
   const metadata = { order_id: order.id, request_id: order.requestId, version_id: order.versionId };
+  const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = opts.price.priceId
+    ? { quantity: 1, price: opts.price.priceId }
+    : {
+        quantity: 1,
+        price_data: {
+          currency: opts.price.currency,
+          unit_amount: opts.price.cents,
+          tax_behavior: env.stripe.taxBehavior,
+          product_data: { name: opts.productName, description: opts.description, tax_code: env.stripe.taxCode },
+        },
+      };
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     ui_mode: "elements",
     integration_identifier: INTEGRATION_IDENTIFIER,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: env.currency,
-          unit_amount: env.songPriceCents,
-          tax_behavior: env.stripe.taxBehavior,
-          product_data: { name: opts.productName, description: opts.description, tax_code: env.stripe.taxCode },
-        },
-      },
-    ],
+    line_items: [lineItem],
     // Our post-purchase page confirms the session with Stripe; wallets and 3-D Secure come back here.
     return_url: `${env.appUrl}/checkout/${order.id}/complete?session_id={CHECKOUT_SESSION_ID}`,
     customer_email: opts.email || undefined,

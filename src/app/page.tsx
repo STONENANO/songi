@@ -10,6 +10,7 @@ import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { Floaters } from "./home-floaters";
 import { SiteFooter } from "@/components/legal";
+import { getSongPrice } from "@/lib/commerce/pricing";
 import "./home.css";
 
 export const dynamic = "force-dynamic"; // the price comes from server env
@@ -64,8 +65,8 @@ const COPY = {
   final: { title: "Closing headline placeholder", sub: "Closing subline placeholder." },
 };
 
-export default function Home() {
-  const price = env.freeDownloads ? "Free while testing" : env.priceLabel;
+export default async function Home() {
+  const price = env.freeDownloads ? "Free while testing" : (await getSongPrice()).label;
   return (
     <div className="home">
       <nav className="home-nav" aria-label="Main">

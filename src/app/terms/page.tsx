@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { LegalPage, SupportLink, legalEntity } from "@/components/legal";
+import { getSongPrice } from "@/lib/commerce/pricing";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: `Terms of Service · ${BRAND.name}` };
 
 /* DRAFT: have a lawyer review before relying on it. Search for "DRAFT" in app/ to find all three policies. */
-export default function Terms() {
+export default async function Terms() {
+  const price = await getSongPrice();
   const brand = BRAND.name;
   const entity = legalEntity();
   return (
@@ -33,7 +35,7 @@ export default function Terms() {
 
       <h2>Price and payment</h2>
       <p>
-        Previews are free. The full song costs the price shown before you pay (currently {env.priceLabel}, plus any sales tax shown at checkout). Payments are processed by Stripe; we
+        Previews are free. The full song costs the price shown before you pay (currently {price.label}, plus any sales tax shown at checkout). Payments are processed by Stripe; we
         never see or store your full card number.
       </p>
 

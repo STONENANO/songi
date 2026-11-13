@@ -23,7 +23,9 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
   const prep = await prepareCheckout(c.order);
   if (prep.kind === "paid") redirect(`/checkout/${orderId}/complete`);
 
-  const price = prep.kind === "test" && prep.free ? "Free while testing" : prep.kind === "stripe" && prep.tax && env.stripe.taxBehavior === "exclusive" ? `${env.priceLabel} + tax` : env.priceLabel;
+  // What this checkout actually sells (the price can change in Stripe; an open session keeps its own).
+  const price =
+    prep.kind === "test" ? (prep.free ? "Free while testing" : prep.priceLabel) : prep.kind === "stripe" ? (prep.tax && prep.taxExclusive ? `${prep.priceLabel} + tax` : prep.priceLabel) : "";
   return (
     <Screen>
       {prep.kind === "test" && <Banner>{prep.free ? "Free while we're testing. No card needed." : "Test checkout: no card is charged. Add Stripe keys for real payments."}</Banner>}
@@ -42,7 +44,11 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
       </Card>
       {prep.kind === "closed" ? (
         <Card tone="muted">
-          <Note>This checkout is no longer open ({prep.reason.replace(/_/g, " ")}). Go back to the song to start again.</Note>
+          <Note>
+            {prep.reason === "checkout_unavailable"
+              ? "Checkout is having a problem right now. We've been alerted. Please try again in a few minutes; your song is saved."
+              : `This checkout is no longer open (${prep.reason.replace(/_/g, " ")}). Go back to the song to start again.`}
+          </Note>
           <div className="ui-mt">
             <Button href={`/r/${c.request.id}`}>Back to the song</Button>
           </div>
