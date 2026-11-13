@@ -12,6 +12,7 @@ import { normalizeEmail } from "@/lib/email";
 import { reportIssue } from "@/lib/observability";
 import { composeStory, StoryAnswerSchema } from "@/lib/onboarding/story";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
+import { logPostHogInfo } from "@/lib/posthog-logs";
 
 export const runtime = "nodejs";
 
@@ -121,6 +122,10 @@ export async function POST(req: Request) {
     const n = await songsToday();
     if (n % env.songVolumeAlertPerDay === 0) reportIssue(`${n} new songs in the last 24 hours`, { kind: "song_volume", count: n, threshold: env.songVolumeAlertPerDay }, "warning");
   }
+  logPostHogInfo("song_request_created", {
+    quiz_version: fromQuiz ? "story-v1" : "classic",
+    generation_deferred: true,
+  });
   after(() => runBriefing(row.id));
   const res = NextResponse.json({ id: row.id }, { status: 201 });
   res.headers.append("Set-Cookie", projectCookie(row.id, token));

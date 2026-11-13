@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import { startCheckout } from "@/lib/commerce/orders";
 import { requireProject } from "@/lib/http/guard";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
+import { logPostHogInfo } from "@/lib/posthog-logs";
 
 export const runtime = "nodejs";
 
@@ -20,5 +21,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!["preview_ready", "purchased"].includes(g.r.status)) return NextResponse.json({ error: "Your versions aren't ready yet." }, { status: 409 });
   const result = await startCheckout(id, parsed.data.versionId);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  logPostHogInfo("checkout_started", { checkout_status: g.r.status });
   return NextResponse.json({ checkoutUrl: result.checkoutUrl });
 }
