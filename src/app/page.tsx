@@ -3,8 +3,10 @@
  * floating around it. Everything links into the quiz at /create.
  * Styles: ./home.css (theme tokens only). Art: /public/brand.
  *
- * ALL marketing copy lives in COPY below, as placeholders. Fill it in there; the layout
- * reads nothing else. Interface labels (nav, buttons) are in COPY too.
+ * ALL marketing copy lives in COPY below; the layout reads nothing else. Interface labels
+ * (nav, buttons) are in COPY too. Written to the ConversionAlchemy standards from competitor
+ * review language (Songfinch, ForeverSongs on Trustpilot) until our own reviews exist.
+ * Replace with real customer words and real reviews as they come in.
  */
 import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
@@ -17,52 +19,64 @@ export const dynamic = "force-dynamic"; // the price comes from server env
 
 const COPY = {
   nav: { how: "How it works", faq: "Questions", cta: "Make a song" },
-  cta: "Call to action",
+  cta: "Start their song",
   hero: {
-    note: "Eyebrow note",
+    note: "for the people who mean everything",
     /** The headline in three parts: the middle part gets the blue "crying" treatment. */
-    titleStart: "Headline",
-    titleAccent: "placeholder",
-    titleEnd: "here.",
-    sub: "Subheadline placeholder. One or two sentences that explain the product.",
-    aside: "← short note",
+    titleStart: "Make them",
+    titleAccent: "cry",
+    titleEnd: "happy tears.",
+    sub: "Tell us the little things only you know. We turn them into an original song about them, and you hear it free before you pay.",
+    aside: "← about 2 minutes, no card",
   },
-  facts: ["Proof point one", "Proof point two", "Proof point three", "Proof point four"],
+  facts: ["Hear it free before you pay", "Ready in minutes, not a week", "Built from your real details", "12 styles, from country to lullaby"],
   how: {
-    note: "section note",
-    title: "Section headline placeholder",
+    note: "how it works",
+    title: "Three steps to their song",
     steps: [
-      { img: "marker", title: "Step one title", body: "Step one description placeholder. A sentence or two." },
-      { img: "cassette", title: "Step two title", body: "Step two description placeholder. A sentence or two." },
-      { img: "tissues", title: "Step three title", body: "Step three description placeholder. A sentence or two." },
+      { img: "marker", title: "Tell us their story", body: "A few quick questions: who it's for, the moments you'll never forget, the things only they do. Inside jokes welcome." },
+      { img: "cassette", title: "Hear your versions", body: "In about five minutes we write the lyrics and record a few versions in the style you pick. Listen to all of them free." },
+      { img: "tissues", title: "Pick one and give it", body: "Choose the one that gives you chills. You get the full song, an MP3 and a link to share. Then hand them the tissues." },
     ],
   },
   words: {
-    note: "section note",
-    title: "Section headline placeholder",
-    body: "Body copy placeholder. Two or three sentences that explain this section.",
-    from: "“Example detail from a customer's story.”",
+    note: "the little details",
+    title: "Your words end up in the song",
+    body: "A song that could be about anyone won't make anyone cry. Every song starts from the details you share, so the line about Sunday pancakes is about her Sunday pancakes. You read every lyric before you buy, and you can change any line that isn't right.",
+    from: "“She makes pancakes every Sunday and sings off-key in the car.”",
     becomes: "↓ becomes",
-    lyricLine: "Example lyric line one,",
-    lyricHighlight: "example lyric line two",
-    caption: "example lyric",
+    lyricLine: "Flour on your sleeves every Sunday morning,",
+    lyricHighlight: "singing off-key like the radio's yours",
+    caption: "an example story and lyric",
   },
   price: {
-    note: "section note",
-    sub: "Price subline placeholder.",
-    checks: ["Included item one", "Included item two", "Included item three", "Included item four"],
+    note: "what you get",
+    sub: "One original song, written and recorded for one person. You only pay once you've heard it.",
+    checks: ["The full song, every verse", "MP3 download, yours to keep", "A permanent link to share it", "Lyrics that play along on screen"],
   },
   faq: {
-    note: "section note",
-    title: "FAQ headline placeholder",
+    note: "before you start",
+    title: "Questions people ask first",
     items: [
-      { q: "Question one?", a: "Answer placeholder." },
-      { q: "Question two?", a: "Answer placeholder." },
-      { q: "Question three?", a: "Answer placeholder." },
-      { q: "Question four?", a: "Answer placeholder." },
+      {
+        q: "Is it really about them, or a template?",
+        a: "It's built from your answers. The names, places, sayings and inside jokes you share go into the lyrics, and every song is checked against your story before it's recorded. You read every line before you pay, and you can change any line that's off.",
+      },
+      {
+        q: "What if I don't love it?",
+        a: "You hear the versions free first, so you only pay for one you like. Not quite right? Change a line or ask for another take. If something's still wrong after you buy, we'll fix it or refund you in full within 14 days.",
+      },
+      {
+        q: "How long does it take?",
+        a: "About 2 minutes to tell us the story, then around 5 minutes while we write and record. We email you the link when it's ready, so you can close the page and come back.",
+      },
+      {
+        q: "Is it made with AI?",
+        a: "Yes. The songwriting and singing use AI, guided by your story, and every lyric is checked against what you told us before it's recorded. That's how we can make it in minutes and let you hear it before you pay.",
+      },
     ],
   },
-  final: { title: "Closing headline placeholder", sub: "Closing subline placeholder." },
+  final: { title: "Somebody's about to cry happy tears.", sub: "Start with their name. The rest takes about two minutes." },
 };
 
 export default async function Home() {

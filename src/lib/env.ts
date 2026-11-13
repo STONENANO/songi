@@ -306,6 +306,14 @@ export const env = {
     return flag(process.env.FREE_DOWNLOADS) && this.mockPayments;
   },
   /** The test checkout works locally, and on a live server only in free-download mode. */
+  /**
+   * The "How did it land?" tester box on the song page. Default: only while payments are in
+   * test mode, so real customers never see it. TESTER_FEEDBACK=true / false forces it.
+   */
+  get testerFeedback(): boolean {
+    const v = process.env.TESTER_FEEDBACK;
+    return v === undefined || v === "" ? this.mockPayments : flag(v);
+  },
   get testCheckoutAllowed(): boolean {
     return this.mockPayments && (!this.isProd || this.freeDownloads);
   },
