@@ -2,7 +2,8 @@
 /**
  * Cloudflare Turnstile on the quiz's last screen. Most people never see it ("interaction-only");
  * it shows a checkbox only when Cloudflare isn't sure. The token goes with "Write the song"
- * and is checked on the server. Renders nothing when no site key is configured.
+ * and is checked on the server. Renders nothing without a site key. The key comes from the
+ * server at page load (see create/page.tsx), never from the build.
  */
 import { useEffect, useRef } from "react";
 
@@ -17,8 +18,6 @@ declare global {
   }
 }
 
-const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
-export const turnstileEnabled = SITE_KEY !== "";
 const SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 let loading: Promise<TurnstileApi> | null = null;
@@ -42,20 +41,20 @@ function loadTurnstile(): Promise<TurnstileApi> {
  * onToken("") means "no valid token right now" (expired, failed, reset).
  * Bump resetKey after a submit is refused: tokens are single-use.
  */
-export function Turnstile({ onToken, onError, resetKey }: { onToken: (token: string) => void; onError: (message: string) => void; resetKey: number }) {
+export function Turnstile({ siteKey, onToken, onError, resetKey }: { siteKey: string; onToken: (token: string) => void; onError: (message: string) => void; resetKey: number }) {
   const box = useRef<HTMLDivElement>(null);
   const widget = useRef<string | null>(null);
   const handlers = useRef({ onToken, onError });
   handlers.current = { onToken, onError };
 
   useEffect(() => {
-    if (!turnstileEnabled || !box.current) return;
+    if (!siteKey || !box.current) return;
     let cancelled = false;
     loadTurnstile()
       .then((ts) => {
         if (cancelled || !box.current) return;
         widget.current = ts.render(box.current, {
-          sitekey: SITE_KEY,
+          sitekey: siteKey,
           action: "create_song",
           appearance: "interaction-only",
           "refresh-expired": "auto",
@@ -73,7 +72,7 @@ export function Turnstile({ onToken, onError, resetKey }: { onToken: (token: str
       if (widget.current && window.turnstile) window.turnstile.remove(widget.current);
       widget.current = null;
     };
-  }, []);
+  }, [siteKey]);
 
   useEffect(() => {
     if (resetKey === 0 || !widget.current || !window.turnstile) return;
@@ -81,6 +80,6 @@ export function Turnstile({ onToken, onError, resetKey }: { onToken: (token: str
     window.turnstile.reset(widget.current);
   }, [resetKey]);
 
-  if (!turnstileEnabled) return null;
+  if (!siteKey) return null;
   return <div ref={box} style={{ display: "flex", justifyContent: "center", minHeight: 0 }} />;
 }

@@ -32,7 +32,7 @@ import {
 import { DETAIL_EXAMPLES, FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, TRUST, feelingsFor, threadByKey, threadsFor } from "@/lib/onboarding/content";
 import { CUSTOM_GENRE, MAX_THREADS, MIN_THREADS, RECOMMENDED_THREADS, track, type Quiz } from "./use-quiz";
 import { OTHER_ANSWER, formatFor, isAnswered, type BlanksFormat, type TapFormat } from "@/lib/onboarding/story-formats";
-import { Turnstile, turnstileEnabled } from "./turnstile";
+import { Turnstile } from "./turnstile";
 
 export type Genre = { key: string; label: string; tagline: string };
 
@@ -717,9 +717,9 @@ export function SendScreen(q: Quiz, genres: Genre[]): ScreenParts {
     ),
     footer: (
       <>
-        <Turnstile onToken={q.setTurnstileToken} onError={q.setError} resetKey={q.turnstileReset} />
-        <Button block disabled={!emailOk || q.busy || (turnstileEnabled && !q.turnstileToken)} onClick={q.submit}>
-          {q.busy ? "Starting…" : turnstileEnabled && !q.turnstileToken ? "One moment…" : `Write ${q.name}'s song`}
+        <Turnstile siteKey={q.turnstileSiteKey} onToken={q.setTurnstileToken} onError={q.setError} resetKey={q.turnstileReset} />
+        <Button block disabled={!emailOk || q.busy || (!!q.turnstileSiteKey && !q.turnstileToken)} onClick={q.submit}>
+          {q.busy ? "Starting…" : q.turnstileSiteKey && !q.turnstileToken ? "One moment…" : `Write ${q.name}'s song`}
         </Button>
         <TrustRow items={["Free preview", "No card needed", "Change any line later"]} />
       </>

@@ -120,7 +120,8 @@ export function track(type: string, payload: Record<string, string | number | bo
   }
 }
 
-export function useQuiz() {
+/** turnstileSiteKey: from the server when the page loads; "" means no bot check. */
+export function useQuiz(turnstileSiteKey = "") {
   const router = useRouter();
   const [s, setS] = useState<QuizState>(EMPTY);
   const [loaded, setLoaded] = useState(false);
@@ -437,6 +438,7 @@ export function useQuiz() {
     busy,
     error,
     setError,
+    turnstileSiteKey,
     turnstileToken,
     setTurnstileToken,
     turnstileReset,
