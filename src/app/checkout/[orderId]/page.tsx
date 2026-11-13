@@ -56,6 +56,9 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
           email={c.request.email ?? ""}
         />
       )}
+      <Note>
+        By paying you agree to our <a href="/terms">Terms</a>. Not right? See our <a href="/refunds">refund policy</a>.
+      </Note>
     </Screen>
   );
 }

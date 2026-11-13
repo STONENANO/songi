@@ -1,5 +1,6 @@
 /**
- * Transactional email: today only the preview link. Postmark or Resend, chosen by which
+ * Transactional email: the preview link when versions are ready, and the permanent
+ * download link once a song is paid for. Postmark or Resend, chosen by which
  * key is set (POSTMARK_SERVER_TOKEN, RESEND_API_KEY), sent from EMAIL_FROM. Off until
  * configured: then nothing is sent and the song page's copy/share buttons are the way
  * to keep the link.
@@ -10,6 +11,7 @@ import { env } from "../env";
 import { BRAND } from "../brand";
 import { normalizeBrief } from "../songcraft";
 import { previewLinkFor } from "../session/preview-link";
+import { deliveryToken } from "../media/tokens";
 import { reportError } from "../observability";
 import { logEvent } from "../pipeline/common";
 
@@ -40,13 +42,13 @@ export async function sendEmail(m: Mail, fetchImpl: typeof fetch = fetch): Promi
       ? await fetchImpl("https://api.postmarkapp.com/email", {
           method: "POST",
           headers: { "X-Postmark-Server-Token": c.postmark, "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ From: c.from, To: m.to, Subject: m.subject, TextBody: m.text, HtmlBody: m.html, MessageStream: "outbound" }),
+          body: JSON.stringify({ From: c.from, To: m.to, Subject: m.subject, TextBody: m.text, HtmlBody: m.html, MessageStream: "outbound", ...(env.supportEmail ? { ReplyTo: env.supportEmail } : {}) }),
           signal: AbortSignal.timeout(15_000),
         })
       : await fetchImpl("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${c.resend}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: c.from, to: [m.to], subject: m.subject, text: m.text, html: m.html }),
+          body: JSON.stringify({ from: c.from, to: [m.to], subject: m.subject, text: m.text, html: m.html, ...(env.supportEmail ? { reply_to: env.supportEmail } : {}) }),
           signal: AbortSignal.timeout(15_000),
         });
   if (!res.ok) throw new Error(`${c.provider} answered HTTP ${res.status}`);
@@ -105,6 +107,60 @@ export async function sendPreviewLinkEmail(requestId: string, fetchImpl: typeof 
     // Release the claim so a later finalize (e.g. extra takes) can try again.
     await db.delete(schema.webhookReceipts).where(eq(schema.webhookReceipts.id, key));
     reportError(e, { where: "preview_link_email", requestId });
+    return "failed";
+  }
+}
+
+/** Marks "download link emailed" for an order. */
+export const purchaseEmailKey = (orderId: string) => `email:purchase:${orderId}`;
+
+/** The after-purchase email: the permanent link to the song. Pure, for tests. */
+export function purchaseEmail(o: { to: string; name: string; url: string; brand: string; support: string }): Mail {
+  const subject = `${o.name}'s song is yours`;
+  const help = o.support ? `Questions or a problem with the song? Reply to this email or write to ${o.support}.` : "Questions or a problem with the song? Just reply to this email.";
+  const text = [
+    `Thank you! ${o.name}'s song is yours to keep.`,
+    "",
+    "Listen, download the MP3 and share it here. This link doesn't expire, so keep this email:",
+    o.url,
+    "",
+    help,
+    "",
+    `— ${o.brand}`,
+  ].join("\n");
+  const name = escapeHtml(o.name);
+  const html = `<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.5;color:#222;max-width:520px;margin:0 auto;padding:24px">
+<p>Thank you! <b>${name}</b>'s song is yours to keep.</p>
+<p><a href="${escapeHtml(o.url)}" style="display:inline-block;background:#ff5a5f;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:600">Listen and download</a></p>
+<p style="color:#666;font-size:14px">This link doesn't expire, so keep this email. ${escapeHtml(help)}</p>
+<p style="color:#666;font-size:14px">— ${escapeHtml(o.brand)}</p>
+</body></html>`;
+  return { to: o.to, subject, text, html };
+}
+
+/**
+ * Email the buyer the permanent song link once an order is fulfilled. At most once per
+ * order. Never throws: a failed send is reported and released so a retry can send it.
+ */
+export async function sendPurchaseEmail(orderId: string, fetchImpl: typeof fetch = fetch): Promise<"sent" | "not_configured" | "no_email" | "no_order" | "already_sent" | "failed"> {
+  if (!env.email.enabled) return "not_configured";
+  const db = await getDb();
+  const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId)).limit(1);
+  if (!o) return "no_order";
+  const [r] = await db.select().from(schema.songRequests).where(eq(schema.songRequests.id, o.requestId)).limit(1);
+  if (!r?.email) return "no_email";
+  const key = purchaseEmailKey(orderId);
+  const claimed = await db.insert(schema.webhookReceipts).values({ id: key, source: "email", topic: "purchase" }).onConflictDoNothing().returning();
+  if (!claimed.length) return "already_sent";
+  const name = normalizeBrief(r.brief)?.recipient.name || r.recipientName || "your";
+  const url = `${env.appUrl}/d/${deliveryToken(orderId)}`;
+  try {
+    await sendEmail(purchaseEmail({ to: r.email, name, url, brand: BRAND.name, support: env.supportEmail }), fetchImpl);
+    await logEvent(o.requestId, "email:purchase_sent", { orderId });
+    return "sent";
+  } catch (e) {
+    await db.delete(schema.webhookReceipts).where(eq(schema.webhookReceipts.id, key));
+    reportError(e, { where: "purchase_email", requestId: o.requestId });
     return "failed";
   }
 }

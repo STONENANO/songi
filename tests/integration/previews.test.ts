@@ -6,7 +6,9 @@ import { getDb, schema } from "../../src/lib/db";
 import { runBriefing, startGeneration, pollIfGenerating, getRequestView } from "../../src/lib/pipeline/run";
 import { newProjectToken, cookieName, checkAccess } from "../../src/lib/session/project";
 import { issuePreviewLink, verifyPreviewLink, previewLinkFor, previewLinkCookieName } from "../../src/lib/session/preview-link";
-import { normalizeEmail, sendPreviewLinkEmail, previewLinkEmail } from "../../src/lib/email";
+import { normalizeEmail, sendPreviewLinkEmail, previewLinkEmail, sendPurchaseEmail, purchaseEmail } from "../../src/lib/email";
+import { startCheckout, payWithTestCheckout } from "../../src/lib/commerce/orders";
+import { deliveryToken } from "../../src/lib/media/tokens";
 import { purgeExpiredPreviews } from "../../src/lib/pipeline/retention";
 import { getStorage } from "../../src/lib/storage";
 import { POST as createPOST } from "../../src/app/api/requests/route";
@@ -237,6 +239,34 @@ test("link email: names from the story are escaped in the HTML", () => {
   const m = previewLinkEmail({ to: "a@b.c", name: `<script>x</script> "Jo"`, url: "https://x.app/r/1?p=t", hours: 48, brand: "Cryworthy" });
   assert.ok(!m.html.includes("<script>"));
   assert.match(m.html, /&lt;script&gt;/);
+});
+
+/* ------------------------------- purchase email ------------------------------- */
+
+test("purchase email: the permanent song link, once per order, with the support address", async () => {
+  const s = await readySong({ email: "payer@example.com" });
+  const db = await getDb();
+  const [v] = await db.select().from(schema.songVersions).where(eq(schema.songVersions.requestId, s.id)).limit(1);
+  const c = await startCheckout(s.id, v.id);
+  assert.ok(c.ok);
+  const orderId = (c as { orderId: string }).orderId;
+  // Paid with email off (tests never reach a real provider), then sent by hand.
+  await payWithTestCheckout(orderId);
+  await withEnv({ RESEND_API_KEY: "re_test", EMAIL_FROM: "Cryworthy <songs@example.com>", POSTMARK_SERVER_TOKEN: undefined, SUPPORT_EMAIL: "help@example.com" }, async () => {
+    const m = mailer();
+    assert.equal(await sendPurchaseEmail(orderId, m.fetchImpl), "sent");
+    assert.deepEqual(m.sent[0].body.to, ["payer@example.com"]);
+    assert.ok(String(m.sent[0].body.text).includes(`/d/${deliveryToken(orderId)}`));
+    assert.match(String(m.sent[0].body.text), /help@example\.com/);
+    assert.equal(m.sent[0].body.reply_to, "help@example.com", "replies reach a real inbox, not the sending address");
+    assert.equal(await sendPurchaseEmail(orderId, m.fetchImpl), "already_sent");
+    assert.equal(m.sent.length, 1);
+  });
+});
+
+test("purchase email: names are escaped in the HTML", () => {
+  const m = purchaseEmail({ to: "a@b.c", name: `<b>x</b>`, url: "https://x.app/d/t", brand: "Cryworthy", support: "" });
+  assert.ok(!m.html.includes("<b>x</b>"));
 });
 
 /* --------------------------------- retention --------------------------------- */

@@ -1,0 +1,14 @@
+/* Legal pages (terms, privacy, refunds) and the shared site footer. Theme tokens only. */
+.legal { min-height: 100vh; background: var(--color-bg); color: var(--color-text); }
+.legal__inner { max-width: 720px; margin: 0 auto; padding: var(--space-6) 16px var(--space-7); line-height: 1.65; }
+.legal__brand { font-weight: 700; color: var(--color-text); text-decoration: none; }
+.legal h1 { font-size: var(--text-2xl, 2rem); line-height: 1.2; margin: var(--space-5) 0 var(--space-2); }
+.legal h2 { font-size: var(--text-lg, 1.25rem); margin: var(--space-6) 0 var(--space-2); }
+.legal p, .legal li { color: var(--color-text-muted); }
+.legal ul { padding-left: 1.25rem; }
+.legal a { color: var(--color-accent); }
+.legal__updated { font-size: var(--text-sm); color: var(--color-text-faint); }
+.site-foot { border-top: 1px solid var(--color-border); padding-block: var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
+.site-foot nav { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.site-foot a { color: var(--color-text-muted); text-decoration: none; }
+.site-foot a:hover { color: var(--color-text); text-decoration: underline; }
