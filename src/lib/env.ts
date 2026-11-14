@@ -50,6 +50,10 @@ export const env = {
   get metaTestEventCode(): string {
     return (process.env.META_TEST_EVENT_CODE ?? "").trim();
   },
+  /** Stripe test keys (sk_test_/rk_test_): payments are pretend, so they are never reported to Meta as purchases. */
+  get stripeTestMode(): boolean {
+    return /^(sk|rk)_test_/.test(this.stripe.secretKey);
+  },
   get metaGraphUrl(): string {
     return (process.env.META_GRAPH_URL || "https://graph.facebook.com/v23.0").replace(/\/$/, "");
   },
