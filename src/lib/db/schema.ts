@@ -1,3 +1,4 @@
+import type { UtmAttribution } from "../analytics/utm";
 import { pgTable, uuid, text, timestamp, jsonb, integer, real, boolean, serial, numeric } from "drizzle-orm/pg-core";
 
 /** Lifecycle of one song project. Every transition is a pipeline step. */
@@ -62,6 +63,8 @@ export const songRequests = pgTable("song_requests", {
   posthogId: text("posthog_id"),
   /** Meta browser IDs, IP and user agent when the song was started, for server-sent ad conversions. */
   adAttribution: jsonb("ad_attribution").$type<AdAttribution | null>(),
+  /** UTM tags of the ad or link that brought the visitor: the first ever and the last before this song. */
+  utm: jsonb("utm").$type<UtmAttribution | null>(),
 });
 
 export const lyricDrafts = pgTable("lyric_drafts", {

@@ -5,6 +5,7 @@ import "../components/ui/ui.css";
 import { BRAND, SHARE } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { MetaPixel } from "./meta-pixel";
+import { UtmCapture } from "./attribution";
 
 /**
  * Defaults for every page: the browser tab, search results and shared-link previews.
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
+        <UtmCapture />
         {env.metaPixelId && <MetaPixel pixelId={env.metaPixelId} />}
       </body>
     </html>

@@ -12,7 +12,23 @@ import { getDb, schema } from "./db";
 import { env } from "./env";
 import { getSongPrice } from "./commerce/pricing";
 
-export type NumbersSong = { id: string; createdAt: Date; occasion: string; previewsReady: boolean; pickedTake: boolean };
+export type NumbersSong = {
+  id: string;
+  createdAt: Date;
+  occasion: string;
+  previewsReady: boolean;
+  pickedTake: boolean;
+  /** Last ad or link before the song (UTM tags); empty when it came untagged. */
+  source?: string;
+  campaign?: string;
+  ad?: string;
+};
+
+/** Songs that came without UTM tags: typed-in, organic, or an untagged link. */
+export const UNTAGGED = "(no UTM tags)";
+
+/** Most paid first, then most songs: the table to read when deciding which ads to keep. */
+const byResults = (a: { summary: Summary }, b: { summary: Summary }) => b.summary.funnel.paid - a.summary.funnel.paid || b.summary.funnel.started - a.summary.funnel.started;
 export type NumbersOrder = {
   requestId: string;
   status: string;
@@ -157,14 +173,24 @@ export function summarizeBy(input: NumbersInput, key: (s: NumbersSong) => string
   }));
 }
 
-export type NumbersPage = { since: Date | null; total: Summary; weeks: { key: string; summary: Summary }[]; occasions: { key: string; summary: Summary }[]; fee: FeeRule; priceCents: number };
+type Grouped = { key: string; summary: Summary }[];
+export type NumbersPage = { since: Date | null; total: Summary; weeks: Grouped; occasions: Grouped; sources: Grouped; campaigns: Grouped; ads: Grouped; fee: FeeRule; priceCents: number };
+
+/** Sales by where visitors came from: source, campaign, and ad (campaign shown with each ad, since ad names repeat). */
+export function summarizeAttribution(input: NumbersInput, fee: FeeRule, priceCents: number): { sources: Grouped; campaigns: Grouped; ads: Grouped } {
+  return {
+    sources: summarizeBy(input, (s) => s.source || UNTAGGED, fee, priceCents).sort(byResults),
+    campaigns: summarizeBy(input, (s) => s.campaign || (s.source ? `(${s.source}, no campaign tag)` : UNTAGGED), fee, priceCents).sort(byResults),
+    ads: summarizeBy(input, (s) => (s.ad ? `${s.ad}  ·  ${s.campaign || "no campaign"}` : s.source ? `(${s.source}, no ad tag)` : UNTAGGED), fee, priceCents).sort(byResults),
+  };
+}
 
 /** Load every song started since `since` (null = all time) with its orders and costs. */
 export async function loadNumbers(since: Date | null): Promise<NumbersPage> {
   const db = await getDb();
   const { songRequests, orders, costLedger } = schema;
   const reqs = await db
-    .select({ id: songRequests.id, createdAt: songRequests.createdAt, occasion: songRequests.occasion, finalizedAt: songRequests.candidatesFinalizedAt, selected: songRequests.selectedVersionId, status: songRequests.status })
+    .select({ id: songRequests.id, createdAt: songRequests.createdAt, occasion: songRequests.occasion, finalizedAt: songRequests.candidatesFinalizedAt, selected: songRequests.selectedVersionId, status: songRequests.status, utm: songRequests.utm })
     .from(songRequests)
     .where(since ? gte(songRequests.createdAt, since) : undefined);
   const ids = reqs.map((r) => r.id);
@@ -183,6 +209,9 @@ export async function loadNumbers(since: Date | null): Promise<NumbersPage> {
       occasion: r.occasion,
       previewsReady: !!r.finalizedAt || r.status === "preview_ready" || r.status === "purchased",
       pickedTake: !!r.selected,
+      source: r.utm?.last.source,
+      campaign: r.utm?.last.campaign,
+      ad: r.utm?.last.content,
     })),
     orders: ords.map((o) => ({ requestId: o.requestId, status: o.status, amountCents: o.amountCents, taxCents: o.taxCents, real: !!(o.stripePaymentIntentId || o.stripeCheckoutSessionId) })),
     costs: [...songCosts, ...quizCosts].map((c) => ({ requestId: c.requestId, provider: c.provider, costUsd: Number(c.costUsd ?? 0) })),
@@ -195,6 +224,7 @@ export async function loadNumbers(since: Date | null): Promise<NumbersPage> {
     total: summarize(input, fee, priceCents),
     weeks: summarizeBy(input, (s) => weekOf(s.createdAt), fee, priceCents).sort((a, b) => b.key.localeCompare(a.key)),
     occasions: summarizeBy(input, (s) => s.occasion, fee, priceCents).sort((a, b) => b.summary.funnel.started - a.summary.funnel.started),
+    ...summarizeAttribution(input, fee, priceCents),
     fee,
     priceCents,
   };

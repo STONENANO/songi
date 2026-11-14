@@ -10,6 +10,7 @@ import { beatFor, formatFor, ingredientsFor, isAnswered, type TopicAnswer } from
 import { boostersFor, isThin } from "@/lib/onboarding/depth";
 import { captureEvent, posthogId } from "@/lib/analytics/client";
 import { metaTrack } from "@/lib/analytics/meta-pixel";
+import { currentUtm } from "@/lib/analytics/utm";
 import { metaEventId } from "@/lib/analytics/meta-ids";
 
 /** One line read back to the buyer before we write ("story beat"). */
@@ -365,6 +366,7 @@ export function useQuiz(turnstileSiteKey = "") {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         posthogId: posthogId(),
+        utm: currentUtm(),
         recipientName: s.recipientName,
         pronunciation: s.pronunciation,
         relationship: relationshipValue,
