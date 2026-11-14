@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (!allowed) return NextResponse.json(mockProbe(parsed.data));
   try {
     const { result, usage } = await withUsage(() => probeAnswer(parsed.data));
-    // These calls happen before a song exists; they count toward cost per buyer in /admin/numbers.
+    // These calls happen before a song exists; they count toward cost per buyer in /admin/analytics.
     await recordLlmUsage(null, usage).catch((e) => console.warn("[probe] cost not recorded:", e instanceof Error ? e.message : e));
     return NextResponse.json(result);
   } catch (e) {

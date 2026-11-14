@@ -105,7 +105,7 @@ Kie tasks for three takes. Note your Kie credits before and after the first song
 
 ## Admin sign-in
 
-`/admin` (songs, takes, feedback, Numbers) is behind a Supabase Auth sign-in. Supabase only proves who someone
+`/admin` (songs, takes, feedback, Analytics) is behind a Supabase Auth sign-in. Supabase only proves who someone
 is; only the accounts in `ADMIN_EMAILS` get in. The pages aren't linked from the site and tell search engines not
 to index them. Locally, with no Supabase settings, `/admin` is open as before; on a production server without
 them it is closed to everyone.
@@ -132,23 +132,43 @@ In / Providers with its client ID and secret, and add the same Redirect URL as a
 The flow runs on the server (PKCE), the session cookies are httpOnly, and `src/middleware.ts` refreshes the
 session on /admin requests. `ADMIN_TOKEN` now only opens the admin API (`/api/admin/ip`).
 
-## Unit economics (/admin/numbers)
+## Analytics (/admin/analytics)
 
-`/admin/numbers` shows, for songs started in the last 7, 30 or 90 days or all time:
-the funnel from finished quiz to paid, conversion rates, money (charged, tax, refunds, estimated Stripe fees,
-net revenue), AI cost split into Kie, Claude and the quiz's follow-up questions, and cost and profit per buyer.
-Its break-even line says how many previewed songs one sale pays for. Enter the period's ad spend to see cost to
-acquire a buyer, return on ad spend and profit after ads. Tables split it all by week and by occasion.
+`/admin/analytics` (the old `/admin/numbers` redirects there) is the business dashboard, in the app's own style,
+for today, 7, 30 or 90 days, or all time, each compared with the period before:
 
-- Only real Stripe payments count as sales; free test unlocks are listed separately.
-- AI costs are the cost ledger's estimates (`KIE_TASK_COST_USD`, `LLM_*_COST_PER_MTOK`). Check them against
-  your Kie.ai and Anthropic bills. Stripe fees use `STRIPE_FEE_PERCENT` and `STRIPE_FEE_FIXED_CENTS`.
-- The quiz's follow-up questions are recorded in the cost ledger without a song (they run before one exists),
-  so people who leave the quiz still count toward cost per buyer.
+- **Tiles:** conversion rate (purchases ÷ visitors), visitors, quiz completes, purchases, net revenue,
+  **gross profit**, **gross profit per buyer**, AI cost per buyer, each with a trend line.
+- **Conversion funnel:** visitors -> quiz completes -> purchased, with the step-to-step rate and how many were
+  lost between steps; "Every step" adds quiz starts, previews and checkout.
+- **Over time:** visitors, conversion rate, quiz completes and purchases, net revenue and gross profit.
+- **Money:** charged, sales tax, refunds, estimated Stripe fees, net revenue, AI cost, gross profit and gross
+  profit per buyer. **Break-even conversion**: the share of previewed songs that must sell for net revenue to
+  cover the AI cost (AI cost per previewed song ÷ net revenue per sale), shown against the actual rate.
+  An optional ad spend box adds cost per buyer, return on ad spend and gross profit after ads.
+- **By occasion** and **by ad** (with campaign and source tables), from the songs started in the period.
+
+How it counts:
+- Everything lands on the day it happened, midnight to midnight in `ANALYTICS_TIMEZONE` (default
+  America/New_York): visits on the visit day, quiz completes when the song started, purchases and revenue when
+  paid, refunds when refunded, AI cost when spent. The by-occasion and by-ad tables follow each song started in
+  the period to whether it was bought.
+- **Gross profit** = net revenue (after sales tax, refunds and Stripe fees) - all AI cost in the period, including
+  songs nobody bought and the quiz's follow-up questions. Gross profit per buyer = gross profit ÷ purchases.
+- **Visitors** are counted by the site itself: each browser gets a random id (no name, email or IP stored with
+  it) and sends one `site:visit` event a day to `/api/track`. Not counted: /admin and /dev, automated browsers,
+  bots (by user agent) and any browser signed in to /admin. Counting started when this shipped, so the funnel and
+  conversion rate only use the days with visitor counts (the page says so).
+- Only real Stripe payments count as purchases; free test unlocks are shown in the funnel table. While Stripe is
+  on test keys, a banner says purchases and revenue are test payments.
+- AI costs are the cost ledger's estimates (`KIE_TASK_COST_USD`, `LLM_*_COST_PER_MTOK`): check them against your
+  Kie.ai and Anthropic bills. Stripe fees use `STRIPE_FEE_PERCENT` and `STRIPE_FEE_FIXED_CENTS`.
+- Code: `src/lib/analytics/report.ts` (the numbers, unit-tested), `load.ts` (database), `visits.ts` (visitor
+  counting); `src/app/admin/analytics/` (page, charts, styles).
 
 ## Sales by ad (UTM tags)
 
-Tag every ad's link so `/admin/numbers` can show which source, campaign and ad brought sales. In Meta Ads
+Tag every ad's link so `/admin/analytics` can show which source, campaign and ad brought sales. In Meta Ads
 Manager, on each ad: Tracking -> URL parameters:
 
 ```
@@ -161,8 +181,8 @@ Meta fills in the names. For other platforms use the same five tags (`utm_conten
   a visitor who comes back later without them is still credited. A new tagged visit replaces the last touch; the
   first touch is kept too.
 - When a song is started, both touches are saved on it (`song_requests.utm`). Bad tags are dropped, never an error.
-- Numbers -> "Where buyers came from": songs, previews, paid, preview-to-paid, AI cost, cost per buyer and net
-  revenue by `utm_source`, `utm_campaign`, and ad (`utm_content`, shown with its campaign), credited to the last
+- Analytics -> "Purchases by ad": quiz completes, purchases, quiz-to-buy rate and net revenue by ad
+  (`utm_content`, shown with its campaign), with campaign and source tables underneath, credited to the last
   tagged link before the song. Untagged songs are grouped as "(no UTM tags)".
 - Ad spend isn't imported; compare with Ads Manager, or enter a period's spend in the ad spend box.
 
@@ -201,7 +221,7 @@ takes it as a build arg. Use `NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com`
   `relationship` and `genre`. The quiz sends the visitor's PostHog id with the song, so these join that visitor's funnel.
 - Events go through `/ingest` on our own domain (see `next.config.ts`), so fewer are lost to ad blockers.
 - Every event is still written to our own `events` table too. Costs and margins come from the database
-  (`/admin/numbers`), not PostHog. The "Cryworthy: conversion" dashboard in PostHog holds the main funnel,
+  (`/admin/analytics`), not PostHog. The "Cryworthy: conversion" dashboard in PostHog holds the main funnel,
   quiz drop-off by screen, previews to purchase, conversion by `utm_source`, daily volume and revenue.
 
 Main funnel: `quiz:step_view` -> `quiz:submitted` -> `status:preview_ready` -> `preview_play` ->

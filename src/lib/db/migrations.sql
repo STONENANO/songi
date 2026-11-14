@@ -191,8 +191,11 @@ ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS posthog_id text;
 ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS ad_attribution jsonb;
 
 -- UTM tags of the ad or link that brought the visitor (first and last before the song),
--- for sales by campaign and ad in /admin/numbers.
+-- for sales by campaign and ad in /admin/analytics.
 ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS utm jsonb;
+
+-- /admin/analytics reads events by type and date (daily visitors, quiz steps).
+CREATE INDEX IF NOT EXISTS events_type_created_idx ON events(type, created_at);
 
 -- Lock every table to the server. On Supabase the public schema is also served by
 -- its Data API; with RLS on and no policies, the anon and authenticated keys see
