@@ -42,8 +42,9 @@ export function metaEventFor(type: string, payload: Record<string, unknown>): { 
   }
   if (type === "order:paid" && orderId) {
     const amount = Number(payload.amountCents ?? 0) - Number(payload.taxCents ?? 0);
-    // Test checkouts (free unlocks, the test button) have a test_ payment and no money: not a sale.
-    if (String(payload.paymentRef ?? "").startsWith("test_") || amount <= 0) return null;
+    // Not a sale: our test checkout (free unlocks, the test button: test_ payment), no money,
+    // or Stripe in test mode (test card payments).
+    if (String(payload.paymentRef ?? "").startsWith("test_") || amount <= 0 || env.stripeTestMode) return null;
     return {
       name: "Purchase",
       eventId: metaEventId.purchase(orderId),

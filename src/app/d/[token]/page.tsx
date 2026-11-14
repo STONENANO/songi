@@ -33,9 +33,9 @@ export default async function Delivery({ params, searchParams }: { params: Promi
   const song = await loadSong(token);
   if (!song) notFound();
   const { v, r, lyrics, brief, name, giver, title, order } = song;
-  // Right after a real Stripe payment (not a free test unlock): the browser half of Meta's Purchase.
+  // Right after a real Stripe payment (not a free test unlock or a Stripe test-mode card): the browser half of Meta's Purchase.
   const paidCents = (order.amountCents ?? 0) - (order.taxCents ?? 0);
-  const realPurchase = isNew === "1" && paidCents > 0 && !!(order.stripeCheckoutSessionId || order.stripePaymentIntentId);
+  const realPurchase = isNew === "1" && paidCents > 0 && !!(order.stripeCheckoutSessionId || order.stripePaymentIntentId) && !env.stripeTestMode;
 
   const filename = `${title.replace(/[^\w\- ]+/g, "").trim() || "song"}.mp3`;
   const listen = mediaUrl(issueMediaToken({ key: v.audioKey!, kind: "full", ttlSec: env.downloadUrlTtlSec, versionId: v.id }));

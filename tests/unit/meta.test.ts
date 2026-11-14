@@ -24,6 +24,23 @@ test("free test unlocks and $0 orders are never sent as purchases", () => {
   assert.equal(metaEventFor("order:paid", { orderId: "o1", paymentRef: "pi_1", amountCents: 0, taxCents: 0 }), null);
 });
 
+test("Stripe test-mode payments are never sent as purchases", () => {
+  const keep = process.env.STRIPE_SECRET_KEY;
+  const paid = { orderId: "o1", paymentRef: "cs_test_1", amountCents: 3900, taxCents: 0 };
+  try {
+    for (const k of ["sk_test_abc", "rk_test_abc"]) {
+      process.env.STRIPE_SECRET_KEY = k;
+      assert.equal(metaEventFor("order:paid", paid), null, k);
+    }
+    for (const k of ["sk_live_abc", "rk_live_abc"]) {
+      process.env.STRIPE_SECRET_KEY = k;
+      assert.equal(metaEventFor("order:paid", paid)?.name, "Purchase", k);
+    }
+  } finally {
+    process.env.STRIPE_SECRET_KEY = keep ?? "";
+  }
+});
+
 test("checkout start becomes InitiateCheckout; other events are not sent", () => {
   assert.equal(metaEventFor("checkout:started", { orderId: "o2" })?.name, "InitiateCheckout");
   assert.equal(metaEventFor("checkout:started", { orderId: "o2" })?.eventId, "checkout:o2");
