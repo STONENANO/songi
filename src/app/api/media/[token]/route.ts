@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import { Readable } from "node:stream";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { verifyMediaToken } from "@/lib/media/tokens";
 import { getStorage, isSafeKey } from "@/lib/storage";
+import { fileStream } from "@/lib/http/file-stream";
 
 export const runtime = "nodejs";
 
@@ -44,16 +44,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
     if (start >= size) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
     headers["Content-Range"] = `bytes ${start}-${end}/${size}`;
     headers["Content-Length"] = String(end - start + 1);
-    return new Response(webStream(file, { start, end }), { status: 206, headers });
+    return new Response(fileStream(file, { start, end, signal: req.signal }), { status: 206, headers });
   }
   headers["Content-Length"] = String(size);
-  return new Response(webStream(file), { status: 200, headers });
+  return new Response(fileStream(file, { signal: req.signal }), { status: 200, headers });
 }
 
-/**
- * A proper web stream over the file. When the browser cancels (the player seeks, or the
- * listener leaves), the file stream is closed too, instead of writing into a closed response.
- */
-function webStream(file: string, range?: { start: number; end: number }): ReadableStream {
-  return Readable.toWeb(fs.createReadStream(file, range)) as unknown as ReadableStream;
-}
