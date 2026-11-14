@@ -5,6 +5,7 @@ import type { RequestStatus, SongRequest } from "../db/schema";
 import type { LlmUsage } from "../llm/client";
 import { reportError } from "../observability";
 import { forwardEvent } from "../analytics/server";
+import { forwardToMeta } from "../analytics/meta";
 
 const { songRequests, events, costLedger } = schema;
 
@@ -12,6 +13,7 @@ export async function logEvent(requestId: string | null, type: string, payload: 
   const db = await getDb();
   await db.insert(events).values({ requestId, type, payload });
   void forwardEvent(requestId, type, payload);
+  void forwardToMeta(requestId, type, payload);
 }
 
 export async function setStatus(requestId: string, status: RequestStatus, extra: Partial<typeof songRequests.$inferInsert> = {}) {

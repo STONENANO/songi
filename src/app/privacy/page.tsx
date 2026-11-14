@@ -30,6 +30,11 @@ export default function Privacy() {
           <b>Usage data:</b> pages viewed, quiz steps, device and browser type, and your IP address (for security, rate limits and fraud prevention). With analytics, we may record
           anonymised sessions of how the site is used; text you type is masked.
         </li>
+        <li>
+          <b>Advertising measurement:</b> our site uses the Meta Pixel, which sets cookies in your browser. When you start a song, open checkout or buy, we tell Meta (Facebook and
+          Instagram) so we can measure and improve our ads. We send your email address in hashed (scrambled) form, the Meta cookies, your IP address and browser type, never your
+          story, the recipient&rsquo;s details or your song.
+        </li>
       </ul>
 
       <h2>How we use it</h2>
@@ -45,6 +50,7 @@ export default function Privacy() {
         <li>Stripe: payments and sales tax.</li>
         <li>Railway, Cloudflare (R2 storage, bot check) and Supabase: hosting, storage and security.</li>
         <li>PostHog (analytics) and Sentry (error reports, with story text and emails removed).</li>
+        <li>Meta Platforms: advertising measurement (see above).</li>
         <li>Our email provider: sends your links.</li>
       </ul>
       <p>We&rsquo;re based in Georgia, USA. These providers may process data in the United States and other countries.</p>

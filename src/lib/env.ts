@@ -37,6 +37,23 @@ export const env = {
     return (process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com").replace(/\/$/, "");
   },
 
+  /* ---------------- Meta (Pixel + Conversions API) ---------------- */
+  /** Meta Pixel / dataset ID. Public: the browser loads it. Empty = no Meta tracking at all. */
+  get metaPixelId(): string {
+    return (process.env.META_PIXEL_ID ?? "").trim();
+  },
+  /** Conversions API access token (Events Manager -> dataset -> Settings). Secret. Empty = browser Pixel only. */
+  get metaCapiToken(): string {
+    return (process.env.META_CAPI_TOKEN ?? "").trim();
+  },
+  /** Events Manager -> Test events code, while checking the setup. Remove it afterwards. */
+  get metaTestEventCode(): string {
+    return (process.env.META_TEST_EVENT_CODE ?? "").trim();
+  },
+  get metaGraphUrl(): string {
+    return (process.env.META_GRAPH_URL || "https://graph.facebook.com/v23.0").replace(/\/$/, "");
+  },
+
   /* ---------------- Claude ---------------- */
   get anthropicApiKey(): string {
     return process.env.ANTHROPIC_API_KEY ?? "";

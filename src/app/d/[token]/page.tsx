@@ -6,6 +6,8 @@ import { getGenre } from "@/lib/songcraft";
 import { buildLyricSections, timeLyricLines, type StoryLine } from "@/lib/onboarding/lyrics-view";
 import SongPlayer from "./player";
 import { loadSong } from "./song-data";
+import { MetaEvent } from "../../meta-pixel";
+import { metaEventId } from "@/lib/analytics/meta-ids";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,10 @@ export default async function Delivery({ params, searchParams }: { params: Promi
   const [{ token }, { new: isNew }] = await Promise.all([params, searchParams]);
   const song = await loadSong(token);
   if (!song) notFound();
-  const { v, r, lyrics, brief, name, giver, title } = song;
+  const { v, r, lyrics, brief, name, giver, title, order } = song;
+  // Right after a real Stripe payment (not a free test unlock): the browser half of Meta's Purchase.
+  const paidCents = (order.amountCents ?? 0) - (order.taxCents ?? 0);
+  const realPurchase = isNew === "1" && paidCents > 0 && !!(order.stripeCheckoutSessionId || order.stripePaymentIntentId);
 
   const filename = `${title.replace(/[^\w\- ]+/g, "").trim() || "song"}.mp3`;
   const listen = mediaUrl(issueMediaToken({ key: v.audioKey!, kind: "full", ttlSec: env.downloadUrlTtlSec, versionId: v.id }));
@@ -46,7 +51,15 @@ export default async function Delivery({ params, searchParams }: { params: Promi
   const sections = lyrics ? timeLyricLines(buildLyricSections(lyrics.displayLyrics, storyLines), v.alignedWords) : [];
 
   return (
-    <SongPlayer
+    <>
+      {realPurchase && (
+        <MetaEvent
+          name="Purchase"
+          eventId={metaEventId.purchase(order.id)}
+          params={{ value: paidCents / 100, currency: (order.currency ?? env.currency).toUpperCase(), content_type: "product", content_ids: ["song"], num_items: 1 }}
+        />
+      )}
+      <SongPlayer
       title={title}
       byline={`For ${name}${giver ? ` · from ${giver}` : ""} · ${getGenre(r.genreKey).label}`}
       recipient={name}
@@ -55,6 +68,7 @@ export default async function Delivery({ params, searchParams }: { params: Promi
       sections={sections}
       welcome={isNew === "1"}
       durationS={v.duration}
-    />
+      />
+    </>
   );
 }

@@ -222,7 +222,7 @@ async function markPaid(row: Order, p: Payment): Promise<string> {
     .where(and(eq(orders.id, row.id), eq(orders.status, "pending")))
     .returning();
   if (!claimed.length) return "already_processed";
-  await logEvent(row.requestId, newStatus === "paid" ? "order:paid" : "order:duplicate_payment", { orderId: row.id, paymentRef, amountCents, taxCents: p.taxCents ?? 0 });
+  await logEvent(row.requestId, newStatus === "paid" ? "order:paid" : "order:duplicate_payment", { orderId: row.id, paymentRef, amountCents, taxCents: p.taxCents ?? 0, currency });
   if (newStatus !== "paid") {
     reportIssue("Second payment for an already-paid version: refund it", { kind: "duplicate_payment", orderId: row.id, otherOrderId: otherPaid?.id ?? null });
     return "duplicate_payment";

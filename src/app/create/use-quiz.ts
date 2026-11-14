@@ -9,6 +9,8 @@ import { FEELINGS, OCCASIONS, OTHER, RELATIONSHIPS, fill, inferRelationship, isG
 import { beatFor, formatFor, ingredientsFor, isAnswered, type TopicAnswer } from "@/lib/onboarding/story-formats";
 import { boostersFor, isThin } from "@/lib/onboarding/depth";
 import { captureEvent, posthogId } from "@/lib/analytics/client";
+import { metaTrack } from "@/lib/analytics/meta-pixel";
+import { metaEventId } from "@/lib/analytics/meta-ids";
 
 /** One line read back to the buyer before we write ("story beat"). */
 export type Beat = { key: string; topic: string; emoji: string; text: string; original: string; edited: boolean; gone: boolean };
@@ -390,6 +392,7 @@ export function useQuiz(turnstileSiteKey = "") {
       return;
     }
     const id = (json as { id: string }).id;
+    metaTrack("Lead", { content_name: "song" }, metaEventId.lead(id));
     track(
       "quiz:submitted",
       { threads: s.threads.length, answered: answered.length, ingredients: ingredients.length, strength, beatsEdited: beats.filter((b) => b.edited).length, beatsLeftOut: beats.filter((b) => b.gone).length, openBox: !!s.anythingElse.trim(), thin, boostersFilled: Object.values(s.boosters).filter((v) => v.trim()).length, stillThin },

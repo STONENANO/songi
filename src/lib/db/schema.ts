@@ -60,6 +60,8 @@ export const songRequests = pgTable("song_requests", {
   previewsPurgedAt: timestamp("previews_purged_at", { withTimezone: true }),
   /** The visitor's PostHog distinct id, sent by the quiz, so server events join their funnel. */
   posthogId: text("posthog_id"),
+  /** Meta browser IDs, IP and user agent when the song was started, for server-sent ad conversions. */
+  adAttribution: jsonb("ad_attribution").$type<AdAttribution | null>(),
 });
 
 export const lyricDrafts = pgTable("lyric_drafts", {
@@ -204,6 +206,7 @@ export const feedback = pgTable("feedback", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export type AdAttribution = { fbp?: string; fbc?: string; ip?: string; ua?: string };
 export type AlignedWord = { word: string; startS: number; endS: number; success: boolean };
 export type SongRequest = typeof songRequests.$inferSelect;
 export type LyricDraft = typeof lyricDrafts.$inferSelect;

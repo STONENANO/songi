@@ -4,6 +4,7 @@ import "./globals.css";
 import "../components/ui/ui.css";
 import { BRAND, SHARE } from "@/lib/brand";
 import { env } from "@/lib/env";
+import { MetaPixel } from "./meta-pixel";
 
 /**
  * Defaults for every page: the browser tab, search results and shared-link previews.
@@ -38,7 +39,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link rel="stylesheet" href={FONTS} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {env.metaPixelId && <MetaPixel pixelId={env.metaPixelId} />}
+      </body>
     </html>
   );
 }

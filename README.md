@@ -146,6 +146,27 @@ acquire a buyer, return on ad spend and profit after ads. Tables split it all by
 - The quiz's follow-up questions are recorded in the cost ledger without a song (they run before one exists),
   so people who leave the quiz still count toward cost per buyer.
 
+## Meta ads tracking (Pixel + Conversions API)
+
+With `META_PIXEL_ID` set, the browser loads the Meta Pixel after the page has loaded (never on /admin or /dev),
+and with `META_CAPI_TOKEN` the server also sends the same events through Meta's Conversions API:
+
+| Event | Browser | Server | Event id |
+|---|---|---|---|
+| PageView | every page | - | - |
+| Lead | quiz submitted | song created | `lead:<song id>` |
+| InitiateCheckout | checkout page | order created | `checkout:<order id>` |
+| Purchase | first visit to the song after paying | Stripe payment confirmed | `purchase:<order id>` |
+
+- Matching ids let Meta keep one copy of each event. Purchase value is the price before tax.
+- Free test unlocks and $0 orders are never sent as purchases.
+- Server events carry the email hashed with SHA-256, a hashed song id, Meta's `_fbp`/`_fbc` cookies, IP and
+  user agent, captured when the song was started (`song_requests.ad_attribution`).
+- To check the setup: Events Manager -> Test events, put its code in `META_TEST_EVENT_CODE`, make a song, then
+  remove the code.
+- Code: `src/lib/analytics/meta.ts` (server), `src/lib/analytics/meta-pixel.ts` and `src/app/meta-pixel.tsx`
+  (browser), `src/lib/analytics/meta-ids.ts` (shared ids).
+
 ## Analytics (PostHog)
 
 Funnels, quiz drop-off, traffic sources and session replay. Off until `NEXT_PUBLIC_POSTHOG_KEY` is set
