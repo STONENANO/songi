@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { summarize, summarizeBy, stripeFeeCents, weekOf, type NumbersInput, type NumbersSong } from "../../src/lib/numbers";
+import { summarize, summarizeAttribution, summarizeBy, UNTAGGED, stripeFeeCents, weekOf, type NumbersInput, type NumbersSong } from "../../src/lib/numbers";
 
 const FEE = { percent: 2.9, fixedCents: 30 };
 const PRICE = 3900;
@@ -110,4 +110,24 @@ test("groups split songs and keep each group's own orders and costs", () => {
   assert.equal(by.get("anniversary")!.funnel.paid, 1);
   assert.equal(by.get("birthday")!.funnel.paid, 0);
   close(by.get("birthday")!.costs.totalUsd, 1.44);
+});
+
+test("sales by source, campaign and ad: most paid first, untagged songs grouped", () => {
+  const input = tenPreviewsOneSale();
+  // s0 (the buyer) and s1 from ad hook_v2; s2 from hook_v1; s3 from facebook without an ad tag; the rest untagged.
+  Object.assign(input.songs[0], { source: "facebook", campaign: "Q4 Moms", ad: "hook_v2" });
+  Object.assign(input.songs[1], { source: "facebook", campaign: "Q4 Moms", ad: "hook_v2" });
+  Object.assign(input.songs[2], { source: "facebook", campaign: "Q4 Moms", ad: "hook_v1" });
+  Object.assign(input.songs[3], { source: "facebook" });
+  const { sources, campaigns, ads } = summarizeAttribution(input, FEE, PRICE);
+  assert.deepEqual(sources.map((g) => [g.key, g.summary.funnel.started, g.summary.funnel.paid]), [["facebook", 4, 1], [UNTAGGED, 6, 0]]);
+  assert.equal(campaigns[0].key, "Q4 Moms");
+  assert.equal(campaigns[0].summary.funnel.started, 3);
+  assert.ok(campaigns.some((g) => g.key === "(facebook, no campaign tag)"));
+  assert.equal(ads[0].key, "hook_v2  ·  Q4 Moms", "the ad with the sale comes first");
+  assert.equal(ads[0].summary.funnel.paid, 1);
+  assert.equal(ads[0].summary.funnel.started, 2);
+  close(ads[0].summary.rates.previewToPaid, 0.5);
+  assert.ok(ads.some((g) => g.key === "(facebook, no ad tag)"));
+  assert.ok(ads.some((g) => g.key === UNTAGGED));
 });

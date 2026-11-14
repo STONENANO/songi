@@ -146,6 +146,26 @@ acquire a buyer, return on ad spend and profit after ads. Tables split it all by
 - The quiz's follow-up questions are recorded in the cost ledger without a song (they run before one exists),
   so people who leave the quiz still count toward cost per buyer.
 
+## Sales by ad (UTM tags)
+
+Tag every ad's link so `/admin/numbers` can show which source, campaign and ad brought sales. In Meta Ads
+Manager, on each ad: Tracking -> URL parameters:
+
+```
+utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_term={{adset.name}}&utm_content={{ad.name}}
+```
+
+Meta fills in the names. For other platforms use the same five tags (`utm_content` = the ad's name).
+
+- The browser keeps the tags from the landing page for 30 days (localStorage, `src/lib/analytics/utm.ts`), so
+  a visitor who comes back later without them is still credited. A new tagged visit replaces the last touch; the
+  first touch is kept too.
+- When a song is started, both touches are saved on it (`song_requests.utm`). Bad tags are dropped, never an error.
+- Numbers -> "Where buyers came from": songs, previews, paid, preview-to-paid, AI cost, cost per buyer and net
+  revenue by `utm_source`, `utm_campaign`, and ad (`utm_content`, shown with its campaign), credited to the last
+  tagged link before the song. Untagged songs are grouped as "(no UTM tags)".
+- Ad spend isn't imported; compare with Ads Manager, or enter a period's spend in the ad spend box.
+
 ## Meta ads tracking (Pixel + Conversions API)
 
 With `META_PIXEL_ID` set, the browser loads the Meta Pixel after the page has loaded (never on /admin or /dev),

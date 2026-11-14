@@ -8,6 +8,7 @@ import { runBriefing } from "@/lib/pipeline/run";
 import { newProjectToken, projectCookie } from "@/lib/session/project";
 import { rateLimit, clientIp } from "@/lib/http/rate-limit";
 import { attributionFrom, metaEventId, sendMetaEvent } from "@/lib/analytics/meta";
+import { UtmSchema } from "@/lib/analytics/utm";
 import { verifyTurnstile } from "@/lib/http/turnstile";
 import { normalizeEmail } from "@/lib/email";
 import { reportIssue } from "@/lib/observability";
@@ -39,6 +40,8 @@ const Body = z.object({
   turnstileToken: z.string().max(2048).optional(),
   /** The visitor's PostHog id, so server events (previews ready, paid) join their funnel. */
   posthogId: z.string().trim().max(200).optional().default(""),
+  /** UTM tags of the ad or link that brought the visitor. Malformed = dropped, never an error. */
+  utm: UtmSchema.optional().catch(undefined),
 });
 
 export async function POST(req: Request) {
@@ -104,10 +107,11 @@ export async function POST(req: Request) {
       emailNormalized,
       posthogId: b.posthogId || null,
       adAttribution: env.metaPixelId ? attributionFrom(req, ip) : null,
+      utm: b.utm ?? null,
       accessTokenHash: hash,
       // The story quiz's extra answers (one line, feeling, leave-out, who it's from…) live here;
       // `autoRecord` makes the pipeline record as soon as verified lyrics exist.
-      quizSnapshot: { ...b, turnstileToken: undefined, posthogId: undefined, story, autoRecord: fromQuiz, quizVersion: fromQuiz ? "story-v1" : "classic", submittedAt: new Date().toISOString() },
+      quizSnapshot: { ...b, turnstileToken: undefined, posthogId: undefined, utm: undefined, story, autoRecord: fromQuiz, quizVersion: fromQuiz ? "story-v1" : "classic", submittedAt: new Date().toISOString() },
       // Experiment arm recorded with the project so results can be compared later.
       experiment: {
         writer: env.writerVersion,

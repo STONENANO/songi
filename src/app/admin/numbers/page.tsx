@@ -38,7 +38,7 @@ function FunnelRow({ label, n, of, started }: { label: string; n: number; of: nu
   );
 }
 
-function Groups({ title, rows, first }: { title: string; rows: { key: string; summary: Summary }[]; first: string }) {
+function Groups({ title, rows, first, exact = false }: { title: string; rows: { key: string; summary: Summary }[]; first: string; exact?: boolean }) {
   if (!rows.length) return null;
   return (
     <>
@@ -60,7 +60,7 @@ function Groups({ title, rows, first }: { title: string; rows: { key: string; su
           <tbody>
             {rows.map(({ key, summary: s }) => (
               <tr key={key}>
-                <td>{key.replace(/_/g, " ")}</td>
+                <td>{exact ? key : key.replace(/_/g, " ")}</td>
                 <td>{s.funnel.started}</td>
                 <td>{s.funnel.previewsReady}</td>
                 <td>{s.funnel.paid}</td>
@@ -198,6 +198,14 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
         </div>
       )}
 
+      <h2>Where buyers came from</h2>
+      <p className="muted">
+        From the UTM tags on the link each visitor arrived with (the last tagged link before their song, kept for 30 days). Set them in Meta Ads Manager on each ad: Tracking, URL
+        parameters: <code>utm_source=facebook&amp;utm_medium=paid&amp;utm_campaign={"{{campaign.name}}"}&amp;utm_term={"{{adset.name}}"}&amp;utm_content={"{{ad.name}}"}</code>
+      </p>
+      <Groups title="By source" rows={data.sources} first="utm_source" exact />
+      <Groups title="By campaign" rows={data.campaigns} first="utm_campaign" exact />
+      <Groups title="By ad" rows={data.ads} first="Ad (utm_content) · campaign" exact />
       <Groups title="By week started" rows={data.weeks} first="Week of" />
       <Groups title="By occasion" rows={data.occasions} first="Occasion" />
 
