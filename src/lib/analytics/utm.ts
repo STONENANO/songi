@@ -2,9 +2,9 @@
  * Which ad or link brought a visitor: the UTM tags on the URL they arrived with.
  *
  * Kept in the browser (localStorage, 30 days) from the landing page until they start a
- * song, then saved with it (song_requests.utm), so /admin/numbers can show sales by
+ * song, then saved with it (song_requests.utm), so /admin/analytics can show sales by
  * campaign and ad. Two touches: the first ad that ever brought them, and the last one
- * before the song (the one shown in Numbers, matching Meta's last-click view).
+ * before the song (the one shown in Analytics, matching Meta's last-click view).
  *
  * In Meta Ads Manager -> ad -> Tracking -> URL parameters:
  *   utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_term={{adset.name}}&utm_content={{ad.name}}
