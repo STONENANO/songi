@@ -7,6 +7,7 @@ import { GENRES } from "@/lib/songcraft";
 import { runBriefing } from "@/lib/pipeline/run";
 import { newProjectToken, projectCookie } from "@/lib/session/project";
 import { rateLimit, clientIp } from "@/lib/http/rate-limit";
+import { attributionFrom, metaEventId, sendMetaEvent } from "@/lib/analytics/meta";
 import { verifyTurnstile } from "@/lib/http/turnstile";
 import { normalizeEmail } from "@/lib/email";
 import { reportIssue } from "@/lib/observability";
@@ -102,6 +103,7 @@ export async function POST(req: Request) {
       email: b.email || null,
       emailNormalized,
       posthogId: b.posthogId || null,
+      adAttribution: env.metaPixelId ? attributionFrom(req, ip) : null,
       accessTokenHash: hash,
       // The story quiz's extra answers (one line, feeling, leave-out, who it's from…) live here;
       // `autoRecord` makes the pipeline record as soon as verified lyrics exist.
@@ -125,6 +127,8 @@ export async function POST(req: Request) {
     if (n % env.songVolumeAlertPerDay === 0) reportIssue(`${n} new songs in the last 24 hours`, { kind: "song_volume", count: n, threshold: env.songVolumeAlertPerDay }, "warning");
   }
   after(() => runBriefing(row.id));
+  // Meta Lead, deduplicated with the browser Pixel's Lead by the shared event id.
+  after(() => sendMetaEvent(row.id, { name: "Lead", eventId: metaEventId.lead(row.id), customData: { content_name: "song" } }));
   const res = NextResponse.json({ id: row.id }, { status: 201 });
   res.headers.append("Set-Cookie", projectCookie(row.id, token));
   return res;

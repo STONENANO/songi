@@ -28,12 +28,13 @@ export function contentSecurityPolicy(o: Options): string {
   return [
     "default-src 'self'",
     // Next.js inlines its bootstrap scripts; the dev server also needs eval for hot reload.
-    `script-src 'self' 'unsafe-inline'${o.dev ? " 'unsafe-eval'" : ""} https://js.stripe.com https://*.js.stripe.com https://maps.googleapis.com https://challenges.cloudflare.com`,
+    `script-src 'self' 'unsafe-inline'${o.dev ? " 'unsafe-eval'" : ""} https://js.stripe.com https://*.js.stripe.com https://maps.googleapis.com https://challenges.cloudflare.com https://connect.facebook.net`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://*.stripe.com",
+    // Meta Pixel: its script, and the requests and image beacons it sends events with.
+    "img-src 'self' data: blob: https://*.stripe.com https://www.facebook.com",
     `media-src 'self' blob:${video ? ` ${video}` : ""}`,
-    `connect-src 'self' https://api.stripe.com https://*.stripe.com https://maps.googleapis.com${sentry ? ` ${sentry}` : ""}${o.dev ? " ws: wss:" : ""}`,
+    `connect-src 'self' https://api.stripe.com https://*.stripe.com https://maps.googleapis.com https://www.facebook.com https://connect.facebook.net${sentry ? ` ${sentry}` : ""}${o.dev ? " ws: wss:" : ""}`,
     // Stripe's payment frames, and Cloudflare Turnstile's check on the quiz's last screen.
     "frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com",
     // PostHog session replay compresses recordings in a worker started from a blob: URL.

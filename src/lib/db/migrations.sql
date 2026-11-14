@@ -186,6 +186,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_cents integer;
 -- join the same person's quiz funnel in PostHog.
 ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS posthog_id text;
 
+-- Meta Conversions API: the buyer's Meta browser IDs (_fbp/_fbc cookies), IP and user agent from
+-- when the song was started, so server-sent conversions match the person who clicked the ad.
+ALTER TABLE song_requests ADD COLUMN IF NOT EXISTS ad_attribution jsonb;
+
 -- Lock every table to the server. On Supabase the public schema is also served by
 -- its Data API; with RLS on and no policies, the anon and authenticated keys see
 -- nothing. The app connects as the database owner, which RLS does not restrict.

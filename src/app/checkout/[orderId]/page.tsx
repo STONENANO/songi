@@ -5,6 +5,8 @@ import { loadCheckout } from "@/lib/commerce/checkout-page";
 import { getGenre } from "@/lib/songcraft";
 import { Banner, Button, Card, Checklist, Note, Screen, ScreenTitle } from "@/components/ui";
 import PayForm from "./pay-form";
+import { MetaEvent } from "../../meta-pixel";
+import { metaEventId } from "@/lib/analytics/meta-ids";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,11 @@ export default async function Checkout({ params }: { params: Promise<{ orderId: 
     prep.kind === "test" ? (prep.free ? "Free while testing" : prep.priceLabel) : prep.kind === "stripe" ? (prep.tax && prep.taxExclusive ? `${prep.priceLabel} + tax` : prep.priceLabel) : "";
   return (
     <Screen>
+      <MetaEvent
+        name="InitiateCheckout"
+        eventId={metaEventId.checkout(orderId)}
+        params={{ value: (c.order.amountCents ?? env.songPriceCents) / 100, currency: (c.order.currency ?? env.currency).toUpperCase(), content_type: "product", content_ids: ["song"], num_items: 1 }}
+      />
       {prep.kind === "test" && <Banner>{prep.free ? "Free while we're testing. No card needed." : "Test checkout: no card is charged. Add Stripe keys for real payments."}</Banner>}
       <ScreenTitle eyebrow="Checkout" title={`${c.name}'s full song`} />
       <Card>
