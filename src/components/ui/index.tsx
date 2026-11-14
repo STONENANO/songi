@@ -44,7 +44,9 @@ export function Screen(props: {
           ) : (
             <span className="ui-screen__spacer" />
           )}
-          <span className="ui-screen__brand">{BRAND.name}</span>
+          <a className="ui-screen__brand" href="/" aria-label={`${BRAND.name} home`}>
+            {BRAND.name}
+          </a>
           <span className="ui-screen__spacer" />
         </div>
         {props.chapters && <ChapterProgress chapters={props.chapters} active={props.activeChapter ?? 0} />}
