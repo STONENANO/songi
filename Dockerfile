@@ -11,6 +11,12 @@ ARG NEXT_PUBLIC_POSTHOG_KEY
 ARG NEXT_PUBLIC_POSTHOG_HOST
 # Browser error tracking (Sentry): the DSN is public by design and baked into the browser code.
 ARG NEXT_PUBLIC_SENTRY_DSN
+# Sentry source-map upload (optional): set SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT as
+# build variables to upload maps so stack traces are readable. Build-time only — these are not
+# written into the runtime image, and the uploaded maps are deleted after upload (not served).
+ARG SENTRY_AUTH_TOKEN
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
 RUN npm run build
 ENV NODE_ENV=production PORT=4747
 EXPOSE 4747
