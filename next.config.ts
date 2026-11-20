@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 import { securityHeaders } from "./src/lib/http/security-headers";
 
 // PostHog through our own domain (/ingest), so ad blockers drop fewer analytics events.
@@ -27,4 +28,22 @@ const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
 };
 
-export default nextConfig;
+/**
+ * Sentry source-map upload. Only on when the build-time auth token and the org/project slug are
+ * set (production builds), so local builds and forks that lack them are completely untouched.
+ * It injects a debug id into every bundle and uploads the matching source map, so Sentry shows the
+ * real file and line instead of a minified chunk. Matching is by debug id, not release, so it works
+ * even though .git isn't in the Docker build context. The maps are deleted from the build output
+ * after upload (the SDK default), so they are never served to browsers.
+ */
+const sentryUpload = !!(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT);
+
+export default sentryUpload
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      telemetry: false,
+      widenClientFileUpload: true,
+    })
+  : nextConfig;
