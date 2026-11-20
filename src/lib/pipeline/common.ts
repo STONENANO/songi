@@ -39,10 +39,17 @@ export async function claimStatus(requestId: string, from: RequestStatus[], to: 
   return rows.length > 0;
 }
 
-export async function failRequest(requestId: string, error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  reportError(error, { where: "pipeline", requestId });
-  await setStatus(requestId, "failed", { lastError: message });
+/**
+ * Mark a request failed. `error` is reported to Sentry as-is (a KieError carries the real
+ * provider code — 401 expired key, 402 no credits, 451 content — so the true reason is visible).
+ * `opts.userMessage` is what the customer and admin see; without it the error's own message is shown,
+ * so pass a friendly message whenever `error` is a raw provider/internal error.
+ */
+export async function failRequest(requestId: string, error: unknown, opts: { userMessage?: string } = {}) {
+  const detail = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  reportError(error, { where: "pipeline", requestId, ...(typeof code === "number" ? { providerCode: code } : {}) });
+  await setStatus(requestId, "failed", { lastError: opts.userMessage ?? detail });
 }
 
 export async function getRequest(id: string): Promise<SongRequest | null> {

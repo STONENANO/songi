@@ -73,7 +73,9 @@ async function budgetInput(requestId: string, draftId: string, trigger: BudgetIn
 
 /* ------------------------------- submission ------------------------------- */
 
-async function submitTask(r: SongRequest, draft: LyricDraft, slot: number, archetype: Archetype, trigger: "customer" | "auto" | "retry" | "extra"): Promise<"submitted" | "unknown" | "failed" | "exists"> {
+type SubmitResult = { status: "submitted" | "unknown" | "failed" | "exists"; error?: Error };
+
+async function submitTask(r: SongRequest, draft: LyricDraft, slot: number, archetype: Archetype, trigger: "customer" | "auto" | "retry" | "extra"): Promise<SubmitResult> {
   const db = await getDb();
   const brief = normalizeBrief(r.brief);
   const experiment = (r.experiment ?? {}) as { directionMode?: "director" | "legacy"; vocalMode?: "specific" | "generic" };
@@ -115,26 +117,27 @@ async function submitTask(r: SongRequest, draft: LyricDraft, slot: number, arche
     })
     .onConflictDoNothing()
     .returning();
-  if (!gen) return "exists";
+  if (!gen) return { status: "exists" };
 
   try {
     const taskId = await createMusicTask(built.input, callbackUrl(gen.id));
     await db.update(generations).set({ providerTaskId: taskId, status: "submitted", submittedAt: new Date() }).where(eq(generations.id, gen.id));
     await db.insert(costLedger).values({ requestId: r.id, provider: env.mockKie ? "kie-suno-mock" : "kie-suno", operation: "generate", units: 1, costUsd: env.mockKie ? "0" : env.kieTaskCostUsd.toFixed(4) });
     await logEvent(r.id, "generation:submitted", { generationId: gen.id, taskId, slot, archetype: built.direction?.archetype, trigger, model: built.input.model, registryVersion: built.registryVersion, presetVersion: built.presetVersion, dropped: built.styleReport.dropped, conflicts: built.direction?.conflicts ?? [] });
-    return "submitted";
+    return { status: "submitted" };
   } catch (e) {
     if (e instanceof AmbiguousSubmitError) {
       // The task may exist (and be billed). Wait for a callback carrying this generation id; do not resubmit.
       await db.update(generations).set({ status: "unknown", error: e.message, submittedAt: new Date() }).where(eq(generations.id, gen.id));
       await db.insert(costLedger).values({ requestId: r.id, provider: "kie-suno", operation: "generate_unconfirmed", units: 1, costUsd: env.kieTaskCostUsd.toFixed(4) });
       await logEvent(r.id, "generation:unconfirmed", { generationId: gen.id, error: e.message });
-      return "unknown";
+      return { status: "unknown" };
     }
-    // Definite failure: no task was created, nothing billed.
+    // Definite failure: no task was created, nothing billed. Keep the provider's code/message (e.g. "code 401:
+    // ...") on the generation and in the event, and hand it back so the caller can report the real reason.
     await db.update(generations).set({ status: "failed", error: (e as Error).message, estCostUsd: "0", completedAt: new Date() }).where(eq(generations.id, gen.id));
-    await logEvent(r.id, "generation:failed", { generationId: gen.id, error: (e as Error).message, retryable: e instanceof KieError ? e.retryable : false });
-    return "failed";
+    await logEvent(r.id, "generation:failed", { generationId: gen.id, error: (e as Error).message, providerCode: e instanceof KieError ? e.code : undefined, retryable: e instanceof KieError ? e.retryable : false });
+    return { status: "failed", error: e as Error };
   }
 }
 
@@ -187,23 +190,30 @@ export async function startGeneration(requestId: string, opts: { draftId?: strin
 
   let submitted = 0;
   let lastFailure = "";
+  let lastCause: unknown = null;
   for (let i = 0; i < count; i++) {
     const b = canSubmitTask(await budgetInput(requestId, draft.id, i === 0 ? trigger : "auto"), budgetConfig());
     if (!b.ok) break;
     const slot = await nextSlot(draft.id);
     try {
       const res = await submitTask(r, draft, slot, archetypes[slot % archetypes.length], i === 0 ? trigger : "auto");
-      if (res === "submitted" || res === "unknown") submitted++;
-      if (res === "failed") lastFailure = "The music service rejected the request.";
+      if (res.status === "submitted" || res.status === "unknown") submitted++;
+      else if (res.status === "failed") {
+        lastFailure = "The music service rejected the request.";
+        lastCause = res.error ?? null;
+      }
     } catch (e) {
       lastFailure = e instanceof GenerationInputError ? e.message : (e as Error).message;
+      lastCause = e;
       await logEvent(requestId, "generation:input_error", { error: lastFailure });
       break;
     }
   }
   if (!submitted) {
-    await failRequest(requestId, lastFailure || "Could not start the recording.");
-    return { ok: false, error: lastFailure || "Could not start the recording." };
+    const message = lastFailure || "Could not start the recording.";
+    // Report the real provider error (Kie code/message) to Sentry; the customer sees the friendly message.
+    await failRequest(requestId, lastCause ?? new Error(message), { userMessage: message });
+    return { ok: false, error: message };
   }
   return { ok: true, submitted };
 }
@@ -385,7 +395,7 @@ export async function advanceCandidates(requestId: string): Promise<void> {
     await logEvent(requestId, "generation:followup", { reason: usable.length ? `only ${usable.length} usable version(s)` : "no usable versions yet", slot });
     try {
       const res = await submitTask(r, draft, slot, archetypes[slot % archetypes.length], trigger);
-      if (res === "submitted" || res === "unknown" || res === "exists") return;
+      if (res.status === "submitted" || res.status === "unknown" || res.status === "exists") return;
     } catch (e) {
       await logEvent(requestId, "generation:input_error", { error: (e as Error).message });
     }

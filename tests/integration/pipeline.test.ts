@@ -173,6 +173,27 @@ test("repeated failures stop at the task cap and fail the request", async () => 
   assert.match(v?.lastError ?? "", /couldn't produce/);
 });
 
+test("a provider rejection fails with a friendly message but records the real code", async () => {
+  // Enough rejections to cover every task the first round submits.
+  mockKieControl.queue(...Array.from({ length: env.maxAutoTasks }, () => ({ reject: { code: 401, msg: "API key expired" } })));
+  const id = await project();
+  await runBriefing(id);
+  const g = await startGeneration(id);
+  assert.equal(g.ok, false);
+  assert.match((g as { error: string }).error, /music service rejected/i);
+
+  const v = await getRequestView(id);
+  assert.equal(v?.status, "failed");
+  // The customer (and the view) never see the raw provider code.
+  assert.match(v?.lastError ?? "", /music service rejected/i);
+  assert.doesNotMatch(v?.lastError ?? "", /401/);
+
+  // ...but the real reason is kept on the generation for debugging and error tracking.
+  const gens = await gensFor(id);
+  assert.ok(gens.length > 0 && gens.every((x) => x.status === "failed"));
+  assert.ok(gens.some((x) => (x.error ?? "").includes("401")), "provider code recorded on the generation");
+});
+
 test("a task reported successful with zero valid tracks counts as a failure", async () => {
   mockKieControl.queue({ empty: true }, {}, {});
   const id = await project();
