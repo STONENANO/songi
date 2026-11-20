@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import { getDb, schema } from "@/lib/db";
 import { rateLimit, clientIp } from "@/lib/http/rate-limit";
 import { readJson, BODY_LIMITS } from "@/lib/http/body";
+import { VISIT_EVENT, countableVisit } from "@/lib/analytics/visits";
 
 export const runtime = "nodejs";
 
@@ -20,13 +21,15 @@ const Body = z.object({
     .default({}),
 });
 
-/** Funnel analytics: quiz step views, skips, follow-up answers. Fire and forget from the client. */
+/** Funnel analytics: quiz step views, skips, follow-up answers, daily visits. Fire and forget from the client. */
 export async function POST(req: Request) {
   const body = await readJson(req, BODY_LIMITS.track);
   if (!body.ok) return body.response;
   const parsed = Body.safeParse(body.data);
   if (!parsed.success || !(await rateLimit(`track:${clientIp(req)}`, 300, 60 * 60_000))) return new NextResponse(null, { status: 204 });
   const { type, sessionId, requestId, payload } = parsed.data;
+  // Visitor counts for /admin/analytics: no bots, and not the owner's signed-in browser.
+  if (type === VISIT_EVENT && !countableVisit(req)) return new NextResponse(null, { status: 204 });
   try {
     const db = await getDb();
     await db.insert(schema.events).values({ requestId: requestId ?? null, type, payload: { ...payload, sessionId } });
