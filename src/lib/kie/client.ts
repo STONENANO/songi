@@ -233,6 +233,8 @@ export type MockTaskBehavior = {
   empty?: boolean;
   /** Throw an ambiguous error from createMusicTask (simulates a lost response). */
   ambiguous?: boolean;
+  /** Reject createTask with a definite, non-retryable KieError (e.g. 401 expired key, 402 no credits). */
+  reject?: { code: number; msg: string };
 };
 
 type MockTask = { createdAt: number; input: KieMusicInput; tracks: KieTrack[] | null; behavior: MockTaskBehavior };
@@ -276,6 +278,8 @@ async function makeMockAudio(file: string, kind: string, freq: number) {
 const mock = {
   async create(input: KieMusicInput): Promise<string> {
     const behavior = queue.shift() ?? {};
+    // A definite rejection: no task is created, nothing billed (like a real non-200 from createTask).
+    if (behavior.reject) throw new KieError(`Kie.ai /api/v1/jobs/createTask: code ${behavior.reject.code}: ${behavior.reject.msg}`, false, behavior.reject.code);
     const taskId = `mock_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
     tasks.set(taskId, { createdAt: Date.now(), input, tracks: null, behavior });
     globalMock.__kieMockLast = taskId;
